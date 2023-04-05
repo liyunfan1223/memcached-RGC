@@ -582,6 +582,12 @@ typedef struct _stritem {
     uint16_t        it_flags;   /* ITEM_* above */
     uint8_t         slabs_clsid;/* which slab class we're in */
     uint8_t         nkey;       /* key length, w/terminating null and padding */
+    
+    /* Yunfan */
+    struct _stritem *gnext;
+    struct _stritem *gprev;
+    uint32_t         inserted_ts;
+    uint32_t         inserted_lv;
     /* this odd type prevents type-punning issues when we do
      * the little shuffle to save space when not using CAS. */
     union {

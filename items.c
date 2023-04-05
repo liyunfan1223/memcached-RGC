@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/resource.h>
+#include <sys/param.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <errno.h>
@@ -28,6 +29,11 @@ static void item_unlink_q(item *it);
 static unsigned int lru_type_map[4] = {HOT_LRU, WARM_LRU, COLD_LRU, TEMP_LRU};
 
 #define LARGEST_ID POWER_LARGEST
+/* Yunfan */
+#define GLRFU_MAX_BITS 14
+#define GLRFU_MAX_DECAY_TS (GLRFU_MAX_BITS + 1)
+#define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
+#define DEFAULT_INSERTED_LEVEL (1 << 0)
 typedef struct {
     uint64_t evicted;
     uint64_t evicted_nonzero;
@@ -61,6 +67,46 @@ static unsigned int *stats_sizes_hist = NULL;
 static uint64_t stats_sizes_cas_min = 0;
 static int stats_sizes_buckets = 0;
 static uint64_t cas_id = 0;
+
+/* Yunfan */
+typedef struct _glrfu_t {
+    item* heads[GLRFU_MAX_LEVEL];
+    item* tails[GLRFU_MAX_LEVEL];
+    uint32_t lowest_level_non_empty;
+    uint32_t access_ts;
+    uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
+    uint32_t size[GLRFU_MAX_LEVEL];
+    uint32_t decay_interval;
+    uint32_t update_interval;
+} glrfu_t;
+
+static glrfu_t* glrfus[LARGEST_ID];
+
+static glrfu_t* create_glrfu(void)
+{
+    glrfu_t* ret = calloc(1, sizeof(glrfu_t));
+    ret->lowest_level_non_empty = 0;
+    ret->access_ts = 0;
+    ret->decay_interval = 20000;
+    ret->update_interval = 20000;
+    memset(ret->decay_ts, 0, sizeof(ret->decay_ts));
+    memset(ret->size, 0, sizeof(ret->size));
+    return ret;
+}
+
+static uint32_t calc_real_level(glrfu_t* glrfu, item* it)
+{
+    uint32_t ret = it->inserted_lv;
+    for (int i = 0; i < GLRFU_MAX_DECAY_TS; i++) {
+        if (glrfu->decay_ts[i] >= it->inserted_ts) {
+            ret /= 2;
+            if (!ret) break;
+        } else {
+            break;
+        }
+    }
+    return ret;
+}
 
 static volatile int do_run_lru_maintainer_thread = 0;
 static pthread_mutex_t lru_maintainer_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -423,6 +469,7 @@ static void do_item_link_q(item *it) { /* item is the new head */
 
     head = &heads[it->slabs_clsid];
     tail = &tails[it->slabs_clsid];
+
     assert(it != *head);
     assert((*head && *tail) || (*head == 0 && *tail == 0));
     it->prev = 0;
@@ -441,6 +488,63 @@ static void do_item_link_q(item *it) { /* item is the new head */
     sizes_bytes[it->slabs_clsid] += ITEM_ntotal(it);
 #endif
 
+    /* Yunfan */
+    glrfu_t** glrfu = &glrfus[it->slabs_clsid];
+    if (*glrfu == NULL) {
+        *glrfu = create_glrfu();
+    }
+    (*glrfu)->access_ts++;
+    uint32_t inserted_lv = MIN(calc_real_level(*glrfu, it) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
+    assert(inserted_lv >= 0 && inserted_lv < GLRFU_MAX_LEVEL);
+    // assert(inserted_lv < 0);
+    it->inserted_lv = inserted_lv;
+    it->inserted_ts = (*glrfu)->access_ts;
+    (*glrfu)->size[inserted_lv] += 1;
+    assert((*glrfu)->size[inserted_lv] <= 2000000000);
+    
+    item **ghead, **gtail;
+    ghead = &(*glrfu)->heads[inserted_lv];
+    gtail = &(*glrfu)->tails[inserted_lv];
+    assert((*ghead && *gtail) || (*ghead == 0 && *gtail == 0));
+    it->gprev = 0;
+    it->gnext = *ghead;
+    if (it->gnext) it->gnext->gprev = it;
+    *ghead = it;
+    if (*gtail == 0) *gtail = it;
+
+    if ((*glrfu)->access_ts % (*glrfu)->decay_interval == 0) {
+        for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
+            if ((*glrfu)->heads[i] == NULL) {
+                continue;
+            }
+            uint32_t to = i / 2;
+            if ((*glrfu)->heads[to] == NULL) {
+                (*glrfu)->heads[to] = (*glrfu)->heads[i];
+                (*glrfu)->tails[to] = (*glrfu)->tails[i];
+            } else {
+                assert((*glrfu)->heads[to] != NULL);
+                assert((*glrfu)->tails[to] != NULL);
+                (*glrfu)->heads[to]->gprev = (*glrfu)->tails[i];
+                (*glrfu)->heads[to]->gprev->gnext = (*glrfu)->heads[to];
+                (*glrfu)->heads[to] = (*glrfu)->heads[i];
+
+                // (*glrfu)->tails[to]->gnext = (*glrfu)->heads[i];
+                // (*glrfu)->tails[to]->gnext->gprev = (*glrfu)->tails[to];
+                // (*glrfu)->tails[to] = (*glrfu)->tails[i];
+            }
+            (*glrfu)->heads[i] = NULL;
+            (*glrfu)->tails[i] = NULL;
+            (*glrfu)->size[to] += (*glrfu)->size[i];
+            (*glrfu)->size[i] = 0;
+            assert((*glrfu)->size[to] <= 2000000000);
+            assert((*glrfu)->size[i] <= 2000000000);
+        }
+        for (uint32_t i = GLRFU_MAX_DECAY_TS - 1; i >= 1; i--) {
+            (*glrfu)->decay_ts[i] = (*glrfu)->decay_ts[i - 1];
+        }
+        (*glrfu)->decay_ts[0] = (*glrfu)->access_ts;
+    }
+    
     return;
 }
 
@@ -486,6 +590,32 @@ static void do_item_unlink_q(item *it) {
     sizes_bytes[it->slabs_clsid] -= ITEM_ntotal(it);
 #endif
 
+    /* Yunfan */
+    glrfu_t** glrfu = &glrfus[it->slabs_clsid];
+    if (*glrfu == NULL) {
+        *glrfu = create_glrfu();
+    }
+    item **ghead, **gtail;
+    uint32_t inserted_lv = calc_real_level(*glrfu, it);
+    ghead = &(*glrfu)->heads[inserted_lv];
+    gtail = &(*glrfu)->tails[inserted_lv];
+
+    if (*ghead == it) {
+        assert(it->gprev == 0);
+        *ghead = it->gnext;
+    }
+    if (*gtail == it) {
+        assert(it->gnext == 0);
+        *gtail = it->gprev;
+    }
+    assert(it->gnext != it);
+    assert(it->gprev != it);
+
+    if (it->gnext) it->gnext->gprev = it->gprev;
+    if (it->gprev) it->gprev->gnext = it->gnext;
+    assert((*glrfu)->size[inserted_lv] > 0);
+    (*glrfu)->size[inserted_lv] -= 1;
+    assert((*glrfu)->size[inserted_lv] <= 2000000000);
     return;
 }
 
@@ -592,8 +722,9 @@ int do_item_replace(item *it, item *new_it, const uint32_t hv) {
     MEMCACHED_ITEM_REPLACE(ITEM_key(it), it->nkey, it->nbytes,
                            ITEM_key(new_it), new_it->nkey, new_it->nbytes);
     assert((it->it_flags & ITEM_SLABBED) == 0);
-
     do_item_unlink(it, hv);
+    new_it->inserted_lv = it->inserted_lv;
+    new_it->inserted_ts = it->inserted_ts;
     return do_item_link(new_it, hv);
 }
 
@@ -1074,6 +1205,14 @@ void do_item_bump(LIBEVENT_THREAD *t, item *it, const uint32_t hv) {
                 it->it_flags |= ITEM_ACTIVE;
                 if (ITEM_lruid(it) != COLD_LRU) {
                     it->time = current_time; // only need to bump time.
+                    /* Yunfan */
+                    do_item_unlink(it, hv);
+                    // glrfu_t** glrfu = &glrfus[it->slabs_clsid];
+                    // if (*glrfu == NULL) {
+                    //     *glrfu = create_glrfu();
+                    // }
+                    // it->inserted_lv = MIN(calc_real_level(*glrfu, it) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
+                    do_item_link(it, hv);
                 } else if (!lru_bump_async(t->lru_bump_buf, it, hv)) {
                     // add flag before async bump to avoid race.
                     it->it_flags &= ~ITEM_ACTIVE;
@@ -1108,20 +1247,36 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     if (id == 0)
         return 0;
 
-    int tries = 5;
+    // int tries = 5;
+    int tries = 1;
     item *search;
     item *next_it;
     void *hold_lock = NULL;
     unsigned int move_to_lru = 0;
     uint64_t limit = 0;
 
-    id |= cur_lru;
+    // id |= cur_lru;
     pthread_mutex_lock(&lru_locks[id]);
-    search = tails[id];
+
+    glrfu_t** glrfu = &glrfus[id];
+    if (*glrfu == NULL) {
+        *glrfu = create_glrfu();
+    }
+    uint32_t lowest = 0;
+    for (; lowest < GLRFU_MAX_LEVEL; lowest++) {
+        if ((*glrfu)->heads[lowest] != NULL) {
+            break;
+        }
+    }
+    search = (*glrfu)->tails[lowest];
+    assert((*glrfu)->size[lowest] > 0);
+    assert((*glrfu)->size[lowest] <= 2000000000);
+    // search = tails[id];
     /* We walk up *only* for locked items, and if bottom is expired. */
     for (; tries > 0 && search != NULL; tries--, search=next_it) {
         /* we might relink search mid-loop, so search->prev isn't reliable */
-        next_it = search->prev;
+        // next_it = search->prev;
+        next_it = search->gnext;
         if (search->nbytes == 0 && search->nkey == 0 && search->it_flags == 1) {
             /* We are a crawler, ignore it. */
             if (flags & LRU_PULL_CRAWL_BLOCKS) {
@@ -1275,6 +1430,26 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     return removed;
 }
 
+// /* Yunfan */
+// int glrfu_pull_tail(const int orig_id, 
+//         const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
+//         struct glrfu_pull_tail_return *ret_it)
+// {
+//     item *it = NULL;
+//     int id = orig_id;
+//     int removed = 0;
+//     if (id == 0)
+//         return 0;
+
+//     int tries = 5;
+//     item *search;
+//     item *next_it;
+//     void *hold_lock = NULL;
+//     unsigned int move_to_lru = 0;
+//     uint64_t limit = 0;
+//     pthread_mutex_lock(&glrfu_locks[id]);
+//     return 0;
+// }
 
 /* TODO: Third place this code needs to be deduped */
 static void lru_bump_buf_link_q(lru_bump_buf *b) {
