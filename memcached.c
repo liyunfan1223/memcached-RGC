@@ -4742,8 +4742,12 @@ int main (int argc, char **argv) {
     bool protocol_specified = false;
     bool tcp_specified = false;
     bool udp_specified = false;
-    bool start_lru_maintainer = true;
-    bool start_lru_crawler = true;
+    // Yf: set default lru thread usage to false
+    // bool start_lru_maintainer = true;
+    // bool start_lru_crawler = true;
+    bool start_lru_maintainer = false;
+    bool start_lru_crawler = false;
+    
     bool start_assoc_maint = true;
     enum hashfunc_type hash_type = MURMUR3_HASH;
     uint32_t tocrawl;
