@@ -4742,7 +4742,7 @@ int main (int argc, char **argv) {
     bool protocol_specified = false;
     bool tcp_specified = false;
     bool udp_specified = false;
-    // Yunfan: set default lru thread usage to false
+    /* Yunfan: set default lru thread usage to false */
     // bool start_lru_maintainer = true;
     // bool start_lru_crawler = true;
     bool start_lru_maintainer = false;
