@@ -6035,8 +6035,9 @@ int main (int argc, char **argv) {
     /* In restartable mode and we've decided to issue a fixup on memory */
 
     /* Yunfan */
+#ifdef WITH_GLRFU
     glrfu_init();
-    
+#endif
     if (settings.memory_file != NULL && reuse_mem) {
         mc_ptr_t old_base = meta->old_base;
         assert(old_base == meta->old_base);

@@ -14,6 +14,10 @@ kBigPrime = 0x5bd1e995
 kBigInt = 1 << 62
 mp = {}
 # print(kBigPrime, kBigInt)
+value_len = 256 * 1024
+value_to_set = ''
+for i in range(value_len):
+    value_to_set += 'v'
 
 def report():
     global hit, miss
@@ -21,7 +25,8 @@ def report():
 
 def access_set(key):
     global miss
-    mc.set(key, "value")
+    global value_to_set
+    mc.set(key, value_to_set)
     miss += 1
 
 def access_get(key):
@@ -70,7 +75,8 @@ def test_2():
 
 def test_trace(file_name):
     with open(file_name, "r") as f:
-        for idx, lines in enumerate(f.readlines()):
+        idx = 0
+        for lines in f.readlines():
             k, r, _, _ = lines.strip().split()
             for i in range(int(r)):
                 key = int(k) + i
@@ -79,12 +85,17 @@ def test_trace(file_name):
                 else:
                     mp[key] = 1
                     access_set(str(key))
-            if idx % 10000 == 0:
-                report()
+                idx += 1
+                if idx % 10000 == 0:
+                    report()
+                
 
 if __name__ == "__main__":
     cur_time = time.time()
-    test_trace("traces/OLTP.lis")
-    
+    # test_trace("traces/OLTP_i.lis")
+    # test_trace("traces/readrandom_5.lis")
+    test_trace("traces/P1.lis")
+    # test_2()
+    report()
     end_time = time.time()
     print(f"spend time: {end_time - cur_time}s")

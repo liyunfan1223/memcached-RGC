@@ -23,6 +23,7 @@
 /* need this to get IOV_MAX on some platforms. */
 #ifndef __need_IOV_MAX
 #define __need_IOV_MAX
+#define WITH_GLRFU
 #endif
 #include <limits.h>
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
@@ -583,12 +584,14 @@ typedef struct _stritem {
     uint8_t         slabs_clsid;/* which slab class we're in */
     uint8_t         nkey;       /* key length, w/terminating null and padding */
     
+#ifdef WITH_GLRFU
     /* Yunfan */
     struct _stritem *gnext;
     struct _stritem *gprev;
     uint32_t         inserted_ts;
-    uint32_t         inserted_lv;
-    bool             ghosted;
+    uint8_t         inserted_lv;
+    // bool             ghosted;
+#endif
     /* this odd type prevents type-punning issues when we do
      * the little shuffle to save space when not using CAS. */
     union {

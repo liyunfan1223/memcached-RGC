@@ -55,9 +55,9 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
         const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
         struct lru_pull_tail_return *ret_it);
 
-/* Yunfan */
-int glrfu_pull_tail(const int orig_id, const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
-        struct glrfu_pull_tail_return *ret_it);
+// /* Yunfan */
+// int glrfu_pull_tail(const int orig_id, const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
+//         struct glrfu_pull_tail_return *ret_it);
 
 /*@null@*/
 char *item_cachedump(const unsigned int slabs_clsid, const unsigned int limit, unsigned int *bytes);
@@ -88,7 +88,7 @@ void do_item_bump(LIBEVENT_THREAD *t, item *it, const uint32_t hv);
 void item_stats_reset(void);
 void glrfu_init(void);
 extern pthread_mutex_t lru_locks[POWER_LARGEST];
-extern pthread_mutex_t glru_locks[POWER_LARGEST];
+// extern pthread_mutex_t glru_locks[POWER_LARGEST];
 
 int start_lru_maintainer_thread(void *arg);
 int stop_lru_maintainer_thread(void);
