@@ -86,6 +86,7 @@ item *do_item_get(const char *key, const size_t nkey, const uint32_t hv, LIBEVEN
 item *do_item_touch(const char *key, const size_t nkey, uint32_t exptime, const uint32_t hv, LIBEVENT_THREAD *t);
 void do_item_bump(LIBEVENT_THREAD *t, item *it, const uint32_t hv);
 void item_stats_reset(void);
+void glrfu_init(void);
 extern pthread_mutex_t lru_locks[POWER_LARGEST];
 extern pthread_mutex_t glru_locks[POWER_LARGEST];
 

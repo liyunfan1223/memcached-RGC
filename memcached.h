@@ -588,6 +588,7 @@ typedef struct _stritem {
     struct _stritem *gprev;
     uint32_t         inserted_ts;
     uint32_t         inserted_lv;
+    bool             ghosted;
     /* this odd type prevents type-punning issues when we do
      * the little shuffle to save space when not using CAS. */
     union {

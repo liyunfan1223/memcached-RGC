@@ -6032,6 +6032,10 @@ int main (int argc, char **argv) {
     if (prefill)
         slabs_prefill_global();
     /* In restartable mode and we've decided to issue a fixup on memory */
+
+    /* Yunfan */
+    glrfu_init();
+    
     if (settings.memory_file != NULL && reuse_mem) {
         mc_ptr_t old_base = meta->old_base;
         assert(old_base == meta->old_base);
