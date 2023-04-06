@@ -30,10 +30,10 @@ static unsigned int lru_type_map[4] = {HOT_LRU, WARM_LRU, COLD_LRU, TEMP_LRU};
 
 #define LARGEST_ID POWER_LARGEST
 /* Yunfan */
-#define GLRFU_MAX_BITS 14
+#define GLRFU_MAX_BITS 10
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
-#define DEFAULT_INSERTED_LEVEL (1 << 0)
+#define DEFAULT_INSERTED_LEVEL (1 << 4)
 typedef struct {
     uint64_t evicted;
     uint64_t evicted_nonzero;
@@ -90,12 +90,12 @@ static glrfu_t* glrfus[LARGEST_ID];
 
 void glrfu_init(void)
 {
-    for (uint32_t i = 0; i < 64; i++) {
+    for (uint32_t i = 0; i < LARGEST_ID; i++) {
         glrfus[i] = calloc(1, sizeof(glrfu_t));
         assert(glrfus[i]);
         glrfus[i]->lowest_level_non_empty = 0;
         glrfus[i]->access_ts = 0;
-        glrfus[i]->decay_interval = 1000000000;
+        glrfus[i]->decay_interval = 5000;
         glrfus[i]->update_interval = 20000;
         memset(glrfus[i]->decay_ts, 0, sizeof(glrfus[i]->decay_ts));
         memset(glrfus[i]->size, 0, sizeof(glrfus[i]->size));
@@ -510,9 +510,6 @@ static void do_item_link_q(item *it) { /* item is the new head */
 
     /* Yunfan */
     glrfu_t** glrfu = &glrfus[it->slabs_clsid];
-    // if (*glrfu == NULL) {
-    //     *glrfu = create_glrfu();
-    // }
     (*glrfu)->access_ts++;
     uint32_t inserted_lv = MIN(calc_real_level(*glrfu, it) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
     assert(inserted_lv >= 0 && inserted_lv < GLRFU_MAX_LEVEL);
@@ -1277,7 +1274,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     unsigned int move_to_lru = 0;
     uint64_t limit = 0;
 
-    // id |= cur_lru;
+    id |= cur_lru;
     pthread_mutex_lock(&lru_locks[id]);
 
     glrfu_t** glrfu = &glrfus[id];
@@ -1290,12 +1287,15 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
             break;
         }
     }
-    assert((*glrfu)->heads[lowest] && (*glrfu)->tails[lowest]);
-    search = (*glrfu)->tails[lowest];
+    if (lowest < GLRFU_MAX_LEVEL)
+    // assert((*glrfu)->heads[lowest] && (*glrfu)->tails[lowest]);
+        search = (*glrfu)->tails[lowest];
+    else
+        search = NULL;
     // search = (*glrfu)->heads[lowest];
     // assert((*glrfu)->size[lowest] > 0);
     // assert((*glrfu)->size[lowest] <= 2000000000);
-    // search = tails[id];
+    search = tails[id];
     // search = heads[id];
     /* We walk up *only* for locked items, and if bottom is expired. */
     for (; tries > 0 && search != NULL; tries--, search=next_it) {
