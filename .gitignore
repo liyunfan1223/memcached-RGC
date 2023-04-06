@@ -43,3 +43,5 @@ memcached-*.tar.gz.sha1
 .*.swp
 /compile_commands.json
 .vscode/
+py_bench.py
+traces/
