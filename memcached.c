@@ -264,8 +264,8 @@ static void settings_init(void) {
     settings.lru_crawler_sleep = 100;
     settings.lru_crawler_tocrawl = 0;
     settings.lru_maintainer_thread = false;
-    settings.lru_segmented = false;
-    // settings.lru_segmented = true;
+    // settings.lru_segmented = false;
+    settings.lru_segmented = true;
     settings.hot_lru_pct = 20;
     settings.warm_lru_pct = 40;
     settings.hot_max_factor = 0.2;
@@ -4744,10 +4744,10 @@ int main (int argc, char **argv) {
     bool tcp_specified = false;
     bool udp_specified = false;
     /* Yunfan: set default lru thread usage to false */
-    // bool start_lru_maintainer = true;
-    // bool start_lru_crawler = true;
-    bool start_lru_maintainer = false;
-    bool start_lru_crawler = false;
+    bool start_lru_maintainer = true;
+    bool start_lru_crawler = true;
+    // bool start_lru_maintainer = false;
+    // bool start_lru_crawler = false;
 
     bool start_assoc_maint = true;
     enum hashfunc_type hash_type = MURMUR3_HASH;

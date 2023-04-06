@@ -24,7 +24,7 @@
 #ifndef __need_IOV_MAX
 #define __need_IOV_MAX
 // #define WITH_GLRFU
-#define WITH_GLRFU_ITEM
+// #define WITH_GLRFU_ITEM
 #endif
 #include <limits.h>
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
