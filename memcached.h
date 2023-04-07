@@ -23,7 +23,7 @@
 /* need this to get IOV_MAX on some platforms. */
 #ifndef __need_IOV_MAX
 #define __need_IOV_MAX
-// #define WITH_GLRFU
+#define WITH_GLRFU
 #define WITH_GLRFU_ITEM
 #endif
 #include <limits.h>
@@ -589,7 +589,7 @@ typedef struct _stritem {
     /* Yunfan */
     struct _stritem *gnext;
     struct _stritem *gprev;
-    uint32_t         inserted_ts;
+    uint32_t        inserted_ts;
     uint8_t         inserted_lv;
     // bool             ghosted;
 #endif

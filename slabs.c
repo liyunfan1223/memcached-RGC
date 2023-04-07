@@ -514,7 +514,12 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
         it->next = p->slots;
         if (it->next) it->next->prev = it;
         p->slots = it;
-
+#ifdef WITH_GLRFU
+        it->inserted_lv = 0;
+        it->inserted_ts = 0;
+        it->gprev = NULL;
+        it->gnext = NULL;
+#endif
         p->sl_curr++;
     } else {
         do_slabs_free_chunked(it, size);
