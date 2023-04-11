@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 #include "memcached.h"
 #include "bipbuffer.h"
+#include "hash.h"
 #include "slab_automove.h"
 #include "storage.h"
 #ifdef EXTSTORE
@@ -23,17 +24,21 @@
 #include <poll.h>
 
 /* Forward Declarations */
-static void item_link_q(item *it);
-static void item_unlink_q(item *it);
+static void item_link_q(item *it, uint32_t hv);
+static void item_unlink_q(item *it, uint32_t hv);
 
 static unsigned int lru_type_map[4] = {HOT_LRU, WARM_LRU, COLD_LRU, TEMP_LRU};
 
 #define LARGEST_ID POWER_LARGEST
+#ifdef WITH_GLRFU
 /* Yunfan */
-#define GLRFU_MAX_BITS 8
+#define GLRFU_MAX_BITS 10
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
 #define DEFAULT_INSERTED_LEVEL (1 << 0)
+#define GHOST_HASHSIZE (1 << 16)
+#define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
+#endif
 typedef struct {
     uint64_t evicted;
     uint64_t evicted_nonzero;
@@ -85,6 +90,8 @@ typedef struct _glrfu_t {
     uint32_t update_interval;
     uint32_t total_size;
     // ghost_cache_t* gcache;
+    ghost_item* ghead;
+    ghost_item* gtail;
 } glrfu_t;
 
 static glrfu_t* glrfus[LARGEST_ID];
@@ -96,19 +103,19 @@ void glrfu_init(void)
         assert(glrfus[i]);
         glrfus[i]->lowest_level_non_empty = 0;
         glrfus[i]->access_ts = 0;
-        // glrfus[i]->decay_interval = 80000;
-        glrfus[i]->decay_interval = 555 * 14720;
+        glrfus[i]->decay_interval = 2000000;
+        // glrfus[i]->decay_interval = 0;
         glrfus[i]->update_interval = 20000;
         memset(glrfus[i]->decay_ts, 0, sizeof(glrfus[i]->decay_ts));
         memset(glrfus[i]->size, 0, sizeof(glrfus[i]->size));
     }
 }
 
-static uint32_t calc_real_level(glrfu_t* glrfu, item* it)
+static uint32_t calc_curr_level(glrfu_t* glrfu, uint16_t inserted_lv, uint32_t inserted_ts)
 {
-    uint32_t ret = it->inserted_lv;
+    uint32_t ret = inserted_lv;
     for (int i = 0; i < GLRFU_MAX_DECAY_TS; i++) {
-        if (glrfu->decay_ts[i] >= it->inserted_ts) {
+        if (glrfu->decay_ts[i] >= inserted_ts) {
             ret /= 2;
             if (!ret) break;
         } else {
@@ -117,11 +124,17 @@ static uint32_t calc_real_level(glrfu_t* glrfu, item* it)
     }
     return ret;
 }
+
+static ghost_item ghost_hashtable[GHOST_HASHSIZE];
 #endif
 static volatile int do_run_lru_maintainer_thread = 0;
 static pthread_mutex_t lru_maintainer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t cas_id_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stats_sizes_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// void ghost_hashtable_init() {
+
+// }
 
 void item_stats_reset(void) {
     int i;
@@ -473,7 +486,7 @@ void do_item_link_fixup(item *it) {
     return;
 }
 
-static void do_item_link_q(item *it) { /* item is the new head */
+static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
     item **head, **tail;
     assert((it->it_flags & ITEM_SLABBED) == 0);
 
@@ -499,10 +512,12 @@ static void do_item_link_q(item *it) { /* item is the new head */
 #endif
 
 #ifdef WITH_GLRFU
+    ghost_item *gitem = &ghost_hashtable[hv & GHOST_HASHMASK];
     /* Yunfan */
     glrfu_t** glrfu = &glrfus[it->slabs_clsid];
     (*glrfu)->access_ts++;
-    uint32_t inserted_lv = MIN(calc_real_level(*glrfu, it) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
+    uint32_t inserted_lv = MIN(calc_curr_level(*glrfu, gitem->inserted_lv, gitem->inserted_ts) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
+    gitem->inserted_lv = gitem->inserted_ts = 0;
     assert(inserted_lv >= 0 && inserted_lv < GLRFU_MAX_LEVEL);
     // assert(inserted_lv < 0);
     it->inserted_lv = inserted_lv;
@@ -511,17 +526,17 @@ static void do_item_link_q(item *it) { /* item is the new head */
     (*glrfu)->total_size += 1;
     assert((*glrfu)->size[inserted_lv] <= 2000000000);
     
-    item **ghead, **gtail;
-    ghead = &(*glrfu)->heads[inserted_lv];
-    gtail = &(*glrfu)->tails[inserted_lv];
-    assert((*ghead && *gtail) || (*ghead == 0 && *gtail == 0));
-    it->gprev = 0;
-    it->gnext = *ghead;
-    if (it->gnext) it->gnext->gprev = it;
-    *ghead = it;
-    if (*gtail == 0) *gtail = it;
+    item **mhead, **mtail;
+    mhead = &(*glrfu)->heads[inserted_lv];
+    mtail = &(*glrfu)->tails[inserted_lv];
+    assert((*mhead && *mtail) || (*mhead == 0 && *mtail == 0));
+    it->mprev = 0;
+    it->mnext = *mhead;
+    if (it->mnext) it->mnext->mprev = it;
+    *mhead = it;
+    if (*mtail == 0) *mtail = it;
 
-    if ((*glrfu)->access_ts % (*glrfu)->decay_interval == 0) {
+    if ((*glrfu)->decay_interval && (*glrfu)->access_ts % (*glrfu)->decay_interval == 0) {
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
             if ((*glrfu)->heads[i] == NULL) {
                 continue;
@@ -533,13 +548,9 @@ static void do_item_link_q(item *it) { /* item is the new head */
             } else {
                 assert((*glrfu)->heads[to] != NULL);
                 assert((*glrfu)->tails[to] != NULL);
-                (*glrfu)->heads[to]->gprev = (*glrfu)->tails[i];
-                (*glrfu)->heads[to]->gprev->gnext = (*glrfu)->heads[to];
+                (*glrfu)->heads[to]->mprev = (*glrfu)->tails[i];
+                (*glrfu)->heads[to]->mprev->mnext = (*glrfu)->heads[to];
                 (*glrfu)->heads[to] = (*glrfu)->heads[i];
-
-                // (*glrfu)->heads[to]->gprev = (*glrfu)->tails[i];
-                // (*glrfu)->heads[to]->gprev->gnext = (*glrfu)->heads[to];
-                // (*glrfu)->heads[to] = (*glrfu)->heads[i];
             }
             (*glrfu)->heads[i] = NULL;
             (*glrfu)->tails[i] = NULL;
@@ -557,20 +568,20 @@ static void do_item_link_q(item *it) { /* item is the new head */
     return;
 }
 
-static void item_link_q(item *it) {
+static void item_link_q(item *it, uint32_t hv) {
     pthread_mutex_lock(&lru_locks[it->slabs_clsid]);
-    do_item_link_q(it);
+    do_item_link_q(it, hv);
     pthread_mutex_unlock(&lru_locks[it->slabs_clsid]);
 }
 
-static void item_link_q_warm(item *it) {
+static void item_link_q_warm(item *it, uint32_t hv) {
     pthread_mutex_lock(&lru_locks[it->slabs_clsid]);
-    do_item_link_q(it);
+    do_item_link_q(it, hv);
     itemstats[it->slabs_clsid].moves_to_warm++;
     pthread_mutex_unlock(&lru_locks[it->slabs_clsid]);
 }
 
-static void do_item_unlink_q(item *it) {
+static void do_item_unlink_q(item *it, uint32_t hv) {
     item **head, **tail;
     head = &heads[it->slabs_clsid];
     tail = &tails[it->slabs_clsid];
@@ -605,35 +616,44 @@ static void do_item_unlink_q(item *it) {
     // if (*glrfu == NULL) {
     //     *glrfu = create_glrfu();
     // }
-    item **ghead, **gtail;
-    uint32_t inserted_lv = calc_real_level(*glrfu, it);
-    ghead = &(*glrfu)->heads[inserted_lv];
-    gtail = &(*glrfu)->tails[inserted_lv];
+    item **mhead, **mtail;
+    uint32_t inserted_lv = calc_curr_level(*glrfu, it->inserted_lv, it->inserted_ts);
+    mhead = &(*glrfu)->heads[inserted_lv];
+    mtail = &(*glrfu)->tails[inserted_lv];
 
-    if (*ghead == it) {
-        assert(it->gprev == 0);
-        *ghead = it->gnext;
+    if (*mhead == it) {
+        assert(it->mprev == 0);
+        *mhead = it->mnext;
     }
-    if (*gtail == it) {
-        assert(it->gnext == 0);
-        *gtail = it->gprev;
+    if (*mtail == it) {
+        assert(it->mnext == 0);
+        *mtail = it->mprev;
     }
-    assert(it->gnext != it);
-    assert(it->gprev != it);
+    assert(it->mnext != it);
+    assert(it->mprev != it);
 
-    if (it->gnext) it->gnext->gprev = it->gprev;
-    if (it->gprev) it->gprev->gnext = it->gnext;
+    if (it->mnext) it->mnext->mprev = it->mprev;
+    if (it->mprev) it->mprev->mnext = it->mnext;
     assert((*glrfu)->size[inserted_lv] > 0);
     (*glrfu)->size[inserted_lv] -= 1;
     (*glrfu)->total_size -= 1;
     assert((*glrfu)->size[inserted_lv] <= 2000000000);
+
+    ghost_item *gitem = &ghost_hashtable[hv & GHOST_HASHMASK];
+    // if (gitem->inserted_ts != 0) {
+    //     ghost_item **ghead, **gtail;
+    //     ghead = &(*glrfu)->ghead;
+    //     gtail = &(*glrfu)->gtail;
+    // }
+    gitem->inserted_ts = (*glrfu)->access_ts;
+    gitem->inserted_lv = inserted_lv;
 #endif
     return;
 }
 
-static void item_unlink_q(item *it) {
+static void item_unlink_q(item *it, uint32_t hv) {
     pthread_mutex_lock(&lru_locks[it->slabs_clsid]);
-    do_item_unlink_q(it);
+    do_item_unlink_q(it, hv);
     pthread_mutex_unlock(&lru_locks[it->slabs_clsid]);
 }
 
@@ -652,7 +672,7 @@ int do_item_link(item *it, const uint32_t hv) {
     /* Allocate a new CAS ID on link. */
     ITEM_set_cas(it, (settings.use_cas) ? get_cas_id() : 0);
     assoc_insert(it, hv);
-    item_link_q(it);
+    item_link_q(it, hv);
     refcount_incr(it);
     item_stats_sizes_add(it);
 
@@ -670,7 +690,7 @@ void do_item_unlink(item *it, const uint32_t hv) {
         STATS_UNLOCK();
         item_stats_sizes_remove(it);
         assoc_delete(ITEM_key(it), it->nkey, hv);
-        item_unlink_q(it);
+        item_unlink_q(it, hv);
         do_item_remove(it);
     // }
 }
@@ -686,7 +706,7 @@ void do_item_unlink_nolock(item *it, const uint32_t hv) {
         STATS_UNLOCK();
         item_stats_sizes_remove(it);
         assoc_delete(ITEM_key(it), it->nkey, hv);
-        do_item_unlink_q(it);
+        do_item_unlink_q(it, hv);
         do_item_remove(it);
     }
 }
@@ -704,6 +724,7 @@ void do_item_remove(item *it) {
 /* Bump the last accessed time, or relink if we're in compat mode */
 void do_item_update(item *it) {
     MEMCACHED_ITEM_UPDATE(ITEM_key(it), it->nkey, it->nbytes);
+    uint32_t hv = hash(ITEM_key(it), it->nkey);
 
     /* Hits to COLD_LRU immediately move to WARM. */
     if (settings.lru_segmented) {
@@ -711,11 +732,11 @@ void do_item_update(item *it) {
         if ((it->it_flags & ITEM_LINKED) != 0) {
             if (ITEM_lruid(it) == COLD_LRU && (it->it_flags & ITEM_ACTIVE)) {
                 it->time = current_time;
-                item_unlink_q(it);
+                item_unlink_q(it, hv);
                 it->slabs_clsid = ITEM_clsid(it);
                 it->slabs_clsid |= WARM_LRU;
                 it->it_flags &= ~ITEM_ACTIVE;
-                item_link_q_warm(it);
+                item_link_q_warm(it, hv);
             } else {
                 it->time = current_time;
             }
@@ -727,8 +748,8 @@ void do_item_update(item *it) {
         // if ((it->it_flags & ITEM_LINKED) != 0) {
         assert(it->it_flags & ITEM_LINKED);
             it->time = current_time;
-            item_unlink_q(it);
-            item_link_q(it);
+            item_unlink_q(it, hv);
+            item_link_q(it, hv);
         // }
     }
 }
@@ -739,6 +760,7 @@ int do_item_replace(item *it, item *new_it, const uint32_t hv) {
     assert((it->it_flags & ITEM_SLABBED) == 0);
     do_item_unlink(it, hv);
 #ifdef WITH_GLRFU
+    /* replace */
     new_it->inserted_lv = it->inserted_lv;
     new_it->inserted_ts = it->inserted_ts;
 #endif
@@ -1224,12 +1246,8 @@ void do_item_bump(LIBEVENT_THREAD *t, item *it, const uint32_t hv) {
                     it->time = current_time; // only need to bump time.
                     /* Yunfan */
                     #ifdef WITH_GLRFU
+                    /* replace */
                     do_item_unlink(it, hv);
-                    // glrfu_t** glrfu = &glrfus[it->slabs_clsid];
-                    // if (*glrfu == NULL) {
-                    //     *glrfu = create_glrfu();
-                    // }
-                    // it->inserted_lv = MIN(calc_real_level(*glrfu, it) + DEFAULT_INSERTED_LEVEL, GLRFU_MAX_LEVEL - 1);
                     do_item_link(it, hv);
                     #endif
                 } else if (!lru_bump_async(t->lru_bump_buf, it, hv)) {
@@ -1261,6 +1279,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
         const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
         struct lru_pull_tail_return *ret_it) {
     item *it = NULL;
+    uint32_t it_hv;
     int id = orig_id;
     int removed = 0;
     if (id == 0)
@@ -1297,7 +1316,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     for (; tries > 0 && search != NULL; tries--, search=next_it) {
         /* we might relink search mid-loop, so search->prev isn't reliable */
 #ifdef WITH_GLRFU
-        next_it = search->gprev;
+        next_it = search->mprev;
 #else
         next_it = search->prev;
 #endif
@@ -1368,32 +1387,35 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
                     removed++;
                     if (cur_lru == WARM_LRU) {
                         itemstats[id].moves_within_lru++;
-                        do_item_unlink_q(search);
-                        do_item_link_q(search);
+                        do_item_unlink_q(search, hv);
+                        do_item_link_q(search, hv);
                         do_item_remove(search);
                         item_trylock_unlock(hold_lock);
                     } else {
                         /* Active HOT_LRU items flow to WARM */
                         itemstats[id].moves_to_warm++;
                         move_to_lru = WARM_LRU;
-                        do_item_unlink_q(search);
+                        do_item_unlink_q(search, hv);
                         it = search;
                     }
                 } else if (sizes_bytes[id] > limit ||
                            current_time - search->time > max_age) {
                     itemstats[id].moves_to_cold++;
                     move_to_lru = COLD_LRU;
-                    do_item_unlink_q(search);
+                    do_item_unlink_q(search, hv);
                     it = search;
+                    it_hv = hv;
                     removed++;
                     break;
                 } else {
                     /* Don't want to move to COLD, not active, bail out */
                     it = search;
+                    it_hv = hv;
                 }
                 break;
             case COLD_LRU:
                 it = search; /* No matter what, we're stopping */
+                it_hv = hv;
                 if (flags & LRU_PULL_EVICT) {
                     if (settings.evict_to_free == 0) {
                         /* Don't think we need a counter for this. It'll OOM.  */
@@ -1425,12 +1447,13 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
                     itemstats[id].moves_to_warm++;
                     search->it_flags &= ~ITEM_ACTIVE;
                     move_to_lru = WARM_LRU;
-                    do_item_unlink_q(search);
+                    do_item_unlink_q(search, hv);
                     removed++;
                 }
                 break;
             case TEMP_LRU:
                 it = search; /* Kill the loop. Parent only interested in reclaims */
+                it_hv = hv;
                 break;
         }
         if (it != NULL)
@@ -1446,7 +1469,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
         if (move_to_lru) {
             it->slabs_clsid = ITEM_clsid(it);
             it->slabs_clsid |= move_to_lru;
-            item_link_q(it);
+            item_link_q(it, it_hv);
         }
         if ((flags & LRU_PULL_RETURN_ITEM) == 0) {
             do_item_remove(it);

@@ -586,12 +586,10 @@ typedef struct _stritem {
     uint8_t         nkey;       /* key length, w/terminating null and padding */
     
 #ifdef WITH_GLRFU_ITEM
-    /* Yunfan */
-    struct _stritem *gnext;
-    struct _stritem *gprev;
+    struct _stritem *mnext;
+    struct _stritem *mprev;
     uint32_t        inserted_ts;
-    uint8_t         inserted_lv;
-    // bool             ghosted;
+    uint16_t        inserted_lv;
 #endif
     /* this odd type prevents type-punning issues when we do
      * the little shuffle to save space when not using CAS. */
@@ -604,6 +602,15 @@ typedef struct _stritem {
     /* then " flags length\r\n" (no terminating null) */
     /* then data with terminating \r\n (no terminating null; it's binary!) */
 } item;
+
+#ifdef WITH_GLRFU
+typedef struct _ghost_item_t {
+    struct _ghost_item_t* ghead;
+    struct _ghost_item_t* gtail;
+    uint32_t        inserted_ts;
+    uint16_t        inserted_lv;
+} ghost_item;
+#endif
 
 // TODO: If we eventually want user loaded modules, we can't use an enum :(
 enum crawler_run_type {
