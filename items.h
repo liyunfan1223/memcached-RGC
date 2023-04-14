@@ -52,7 +52,7 @@ void *item_lru_bump_buf_create(void);
 #define GHOST_HASHSIZE (1 << 16)
 #define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
 #define GHOST_CACHE_RATIO 4
-#define ORIGINAL_DECAY_INTERVAL 2000
+#define ORIGINAL_DECAY_INTERVAL 200000000
 #define SIMULATOR_DECAY_RATIO 1.5f
 #endif
 
@@ -154,16 +154,17 @@ void *lru_bump_buf_create(void);
 void do_item_unlink_q_sim(ghost_item *it);
 ghost_item* ghost_item_alloc(void);
 ghost_item* find_ghost_item(uint32_t hv, uint32_t hv2, bool sim);
-ghost_item* delete_ghost_item(uint32_t hv, uint32_t hv2);
+// ghost_item* delete_ghost_item(uint32_t hv, uint32_t hv2);
 void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim);
-void ghost_item_insert_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+void ghost_item_insert_maintain(void* glrfu, ghost_item* git, uint8_t id, bool sim);
 void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim);
-void ghost_item_remove_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+void ghost_item_remove_maintain(void* glrfu, ghost_item* git, uint8_t id, bool sim);
 void ghost_item_free(ghost_item* git);
-void ghost_item_lru_pop(glrfu_t* glrfu, uint8_t id, bool sim);
-void ghost_item_lru_push(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+void ghost_item_lru_pop(void* glrfu, uint8_t id, bool sim);
+void ghost_item_lru_push(void* glrfu, ghost_item* git, uint8_t id, bool sim);
 bool simulator_access(const char *key, const size_t nkey, const uint32_t hv, uint8_t slabclass_id);
 ghost_item* sim_assoc_find(const char *key, const size_t nkey, const uint32_t hv);
+void sim_assoc_remove(ghost_item* git, uint32_t hv, uint32_t hv2);
 ghost_item* assoc_insert_sim(ghost_item* git);
 void pull_tail_sim(uint8_t id);
 #endif

@@ -130,9 +130,9 @@ static uint32_t calc_curr_level_sim(glrfu_sim_t* glrfu, uint16_t inserted_lv, ui
     }
     return ret;
 }
+static ghost_item* sim_hashtable[GHOST_HASHSIZE];
 
 static ghost_item* ghost_hashtable[GHOST_HASHSIZE];
-static ghost_item* sim_hashtable[GHOST_HASHSIZE];
 static ghost_item* sim_ghost_hashtable[GHOST_HASHSIZE];
 static uint8_t last_access_slabclass_id = 0;
 static uint8_t sim_last_access_slabclass_id = 0;
@@ -666,6 +666,12 @@ static void do_item_unlink_q(item *it, uint32_t hv) {
     gitem->inserted_lv = inserted_lv;
     gitem->hv = hv;
     gitem->hv2 = hv2;
+    gitem->slabs_clsid = 255;
+
+    if (gitem->hv == 2217255169) {
+        printf("%u %p\n", hv2, (void *)gitem);
+    }
+    // assert(gitem->hv != 2217255169);
     ghost_item_insert(gitem, hv, hv2, false);
     ghost_item_insert_maintain(glrfu, gitem, it->slabs_clsid, false);
 #endif
@@ -705,12 +711,17 @@ int do_item_link(item *it, const uint32_t hv) {
 void do_item_unlink_q_sim(ghost_item *it) {
     /* Yunfan */
     uint32_t hv = it->hv;
+    uint32_t hv2 = it->hv2;
     glrfu_sim_t* glrfu = &glrfus_sim[it->slabs_clsid];
     ghost_item **ghead, **gtail;
     uint32_t inserted_lv = calc_curr_level_sim(glrfu, it->inserted_lv, it->inserted_ts);
     ghead = &glrfu->heads[inserted_lv];
     gtail = &glrfu->tails[inserted_lv];
-
+    // assert((*ghead)->inserted_ts != 18839);
+    assert(*ghead == NULL || (*ghead)->slabs_clsid != 0);
+    assert(*ghead == NULL || (*ghead)->slabs_clsid != 255);
+    assert(*gtail == NULL || (*gtail)->slabs_clsid != 0);
+    assert((*ghead && *gtail) || (*ghead == 0 && *gtail == 0));
     if (*ghead == it) {
         assert(it->gprev == 0);
         *ghead = it->gnext;
@@ -719,6 +730,9 @@ void do_item_unlink_q_sim(ghost_item *it) {
         assert(it->gnext == 0);
         *gtail = it->gprev;
     }
+    assert(*ghead == NULL || (*ghead)->slabs_clsid != 0);
+    assert(*gtail == NULL || (*gtail)->slabs_clsid != 0);
+    assert((*ghead && *gtail) || (*ghead == 0 && *gtail == 0));
     assert(it->gnext != it);
     assert(it->gprev != it);
 
@@ -728,10 +742,11 @@ void do_item_unlink_q_sim(ghost_item *it) {
     glrfu->size[inserted_lv] -= 1;
     glrfu->total_size -= 1;
     assert(glrfu->size[inserted_lv] <= 2000000000);
+    
+    sim_assoc_remove(it, hv, hv2);
 
     /* ghost item */
-    uint32_t hv2 = it->hv2;
-    ghost_item *gitem = ghost_item_alloc();
+    ghost_item *gitem = it;
     gitem->inserted_ts = glrfu->access_ts;
     gitem->inserted_lv = inserted_lv;
     gitem->hv = hv;
@@ -739,11 +754,12 @@ void do_item_unlink_q_sim(ghost_item *it) {
     gitem->slabs_clsid = it->slabs_clsid;
     ghost_item_insert(gitem, hv, hv2, true);
     ghost_item_insert_maintain((void *)glrfu, gitem, it->slabs_clsid, true);
+    // ghost_item_free(it);
     return;
 }
 
 int do_item_link_sim(ghost_item *git, const uint8_t slabs_clsid) {
-    assoc_insert_sim(git);
+    
     pthread_mutex_lock(&sim_locks[slabs_clsid]);
     do_item_link_q_sim(git, slabs_clsid);
     pthread_mutex_unlock(&sim_locks[slabs_clsid]);
@@ -753,12 +769,15 @@ int do_item_link_sim(ghost_item *git, const uint8_t slabs_clsid) {
 void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
 {
     glrfu_sim_t* glrfu = &glrfus_sim[slabs_clsid];
-    // if (glrfu->total_size >= glrfus[slabs_clsid].total_size) {
+    // if (glrfu->total_size > 0 && glrfu->total_size > glrfus[slabs_clsid].total_size) {
     //     pull_tail_sim(slabs_clsid);
     // }
     /* remove gitem from hashtable */
     uint32_t hv = git->hv;
     uint32_t hv2 = git->hv2;
+    if (hv == 1003261015) {
+        printf("!%u\n", hv2);
+    }
     last_access_slabclass_id = slabs_clsid;
     ghost_item *gitem = find_ghost_item(hv, hv2, true);
 
@@ -791,6 +810,8 @@ void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
     if (git->gnext) git->gnext->gprev = git;
     *ghead = git;
     if (*gtail == 0) *gtail = git;
+
+    assoc_insert_sim(git);
 
     if (glrfu->decay_interval && glrfu->access_ts % glrfu->decay_interval == 0) {
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
@@ -914,11 +935,11 @@ int do_item_replace(item *it, item *new_it, const uint32_t hv) {
                            ITEM_key(new_it), new_it->nkey, new_it->nbytes);
     assert((it->it_flags & ITEM_SLABBED) == 0);
     do_item_unlink(it, hv);
-// #ifdef WITH_GLRFU
+#ifdef WITH_GLRFU
 //     /* replace */
-//     // new_it->inserted_lv = it->inserted_lv;
-//     // new_it->inserted_ts = it->inserted_ts;
-// #endif
+    // new_it->inserted_lv = it->inserted_lv;
+    // new_it->inserted_ts = it->inserted_ts;
+#endif
     return do_item_link(new_it, hv);
 }
 
@@ -2260,7 +2281,9 @@ ghost_item* find_ghost_item(uint32_t hv, uint32_t hv2, bool sim /*false*/)
 
 ghost_item* ghost_item_alloc(void)
 {
-    // return calloc(1, sizeof(ghost_item));
+    // ghost_item* ret = calloc(1, sizeof(ghost_item));
+    // memset(ret, 0, sizeof(ghost_item));
+    // return ret;
     pthread_mutex_lock(&ghost_item_buffer_lock);
     ghost_item* ret;
     if (ghost_item_buffer_head == NULL) {
@@ -2286,9 +2309,27 @@ ghost_item* ghost_item_alloc(void)
     return ret;
 }
 
+void ghost_item_free(ghost_item* git)
+{
+    pthread_mutex_lock(&ghost_item_buffer_lock);
+    assert(git->gprev == NULL || git->gprev->gnext != git);
+    assert(git->gnext == NULL || git->gnext->gprev != git);
+    // assert(git->hv != 3526372155);
+    git->gprev = git->hnext = NULL;
+    git->inserted_lv = git->inserted_ts = 0;
+    git->gnext = ghost_item_buffer_head;
+    git->hv = git->hv2 = 0;
+    git->slabs_clsid = 0;
+    ghost_item_buffer_head = git;
+    pthread_mutex_unlock(&ghost_item_buffer_lock);
+}
+
 void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* false */)
 {
     if (sim) {
+        if (hv == 1003261015) {
+            printf("!%u\n", hv2);
+        }
         git->hnext = sim_ghost_hashtable[hv & GHOST_HASHMASK];
         sim_ghost_hashtable[hv & GHOST_HASHMASK] = git;
     } else {
@@ -2297,23 +2338,24 @@ void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
     }
 }
 
-void ghost_item_insert_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim/* false */)
+void ghost_item_insert_maintain(void* glrfu, ghost_item* git, uint8_t id, bool sim/* false */)
 {
     if (sim) {
         glrfu_sim_t* glrfu_sim = (glrfu_sim_t*)glrfu;
-        assert(GHOST_CACHE_RATIO * glrfu_sim->total_size + GHOST_CACHE_RATIO > 1);
         while (glrfu_sim->gsize > 0 && glrfu_sim->gsize + 1 > GHOST_CACHE_RATIO * glrfu_sim->total_size + GHOST_CACHE_RATIO)
         {
             ghost_item_lru_pop((void *)glrfu_sim, id, sim);
         }
+        assert(GHOST_CACHE_RATIO * glrfu_sim->total_size + GHOST_CACHE_RATIO >= glrfu_sim->gsize + 1);
         ghost_item_lru_push((void *)glrfu_sim, git, id, sim);
     } else {
-        assert(GHOST_CACHE_RATIO * glrfu->total_size + GHOST_CACHE_RATIO > 1);
-        while (glrfu->gsize > 0 && glrfu->gsize + 1 > GHOST_CACHE_RATIO * glrfu->total_size + GHOST_CACHE_RATIO)
+        glrfu_t* ori_glrfu = (glrfu_t*)glrfu;
+        while (ori_glrfu->gsize > 0 && ori_glrfu->gsize + 1 > GHOST_CACHE_RATIO * ori_glrfu->total_size + GHOST_CACHE_RATIO)
         {
-            ghost_item_lru_pop(glrfu, id, sim);
+            ghost_item_lru_pop(ori_glrfu, id, sim);
         }
-        ghost_item_lru_push(glrfu, git, id, sim);
+        assert(GHOST_CACHE_RATIO * ori_glrfu->total_size + GHOST_CACHE_RATIO >= ori_glrfu->gsize + 1);
+        ghost_item_lru_push(ori_glrfu, git, id, sim);
     }
 }
 
@@ -2321,11 +2363,8 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
 {
     if (sim) {
         ghost_item *gitem = sim_ghost_hashtable[hv & GHOST_HASHMASK];
-        if (gitem->hv2 == hv2) {
+        if (gitem && gitem->hv2 == hv2) {
             sim_ghost_hashtable[hv & GHOST_HASHMASK] = gitem->hnext;
-            // if (sim_ghost_hashtable[hv & GHOST_HASHMASK]) {
-            //     sim_ghost_hashtable[hv & GHOST_HASHMASK]->gprev = NULL;
-            // }
             return;
         }
         while (gitem->hnext && gitem->hnext->hv2 != hv2) {
@@ -2335,11 +2374,8 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
         gitem->hnext = gitem->hnext->hnext;
     } else {
         ghost_item *gitem = ghost_hashtable[hv & GHOST_HASHMASK];
-        if (gitem->hv2 == hv2) {
+        if (gitem && gitem->hv2 == hv2) {
             ghost_hashtable[hv & GHOST_HASHMASK] = gitem->hnext;
-            // if (ghost_hashtable[hv & GHOST_HASHMASK]) {
-            //     ghost_hashtable[hv & GHOST_HASHMASK]->gprev = NULL;
-            // }
             return;
         }
         while (gitem->hnext && gitem->hnext->hv2 != hv2) {
@@ -2350,7 +2386,7 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
     }
 }
 
-void ghost_item_remove_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim/* false */)
+void ghost_item_remove_maintain(void* glrfu, ghost_item* git, uint8_t id, bool sim/* false */)
 {
     if (sim) {
         glrfu_sim_t* glrfu_sim = (glrfu_sim_t*)glrfu;
@@ -2369,13 +2405,14 @@ void ghost_item_remove_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, boo
             git->gnext->gprev = git->gprev;
         }
     } else {
+        glrfu_t* ori_glrfu = (glrfu_t*)glrfu;
         itemstats[id].ghost_size--;
-        glrfu->gsize--;
-        if (git == glrfu->ghead) {
-            glrfu->ghead = git->gnext;
+        ori_glrfu->gsize--;
+        if (git == ori_glrfu->ghead) {
+            ori_glrfu->ghead = git->gnext;
         }
-        if (git == glrfu->gtail) {
-            glrfu->gtail = git->gprev;
+        if (git == ori_glrfu->gtail) {
+            ori_glrfu->gtail = git->gprev;
         }
         if (git->gprev) {
             git->gprev->gnext = git->gnext;
@@ -2386,64 +2423,76 @@ void ghost_item_remove_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, boo
     }
 }
 
-void ghost_item_free(ghost_item* git)
-{
-    pthread_mutex_lock(&ghost_item_buffer_lock);
-    git->gprev = git->hnext = NULL;
-    git->inserted_lv = git->inserted_ts = 0;
-    git->gnext = ghost_item_buffer_head;
-    git->hv = git->hv2 = 0;
-    git->slabs_clsid = 0;
-    ghost_item_buffer_head = git;
-    pthread_mutex_unlock(&ghost_item_buffer_lock);
-    // free(git);
-}
-
-void ghost_item_lru_pop(glrfu_t* glrfu, uint8_t id, bool sim)
+void ghost_item_lru_pop(void* glrfu, uint8_t id, bool sim)
 {
     if (sim) {
         glrfu_sim_t* glrfu_sim = (glrfu_sim_t*)glrfu;
         itemstats[id].sim_ghost_size--;
         glrfu_sim->gsize--;
         ghost_item* git = glrfu_sim->gtail;
-        if (glrfu_sim->ghead == git) {
-            glrfu_sim->ghead = NULL;
-            glrfu_sim->gtail = NULL;
-        } else {
-            glrfu_sim->gtail = git->gprev;
-            // if (git->gprev)
-            //     git->gprev->gnext = NULL;
+        if (git == glrfu_sim->ghead) {
+            glrfu_sim->ghead = git->gnext;
         }
+        if (git == glrfu_sim->gtail) {
+            glrfu_sim->gtail = git->gprev;
+        }
+        if (git->gprev) {
+            git->gprev->gnext = git->gnext;
+        }
+        if (git->gnext) {
+            git->gnext->gprev = git->gprev;
+        }
+
         ghost_item_remove(git, git->hv, git->hv2, sim);
+        
         ghost_item_free(git);
     } else {
+        glrfu_t* ori_glrfu = (glrfu_t*)glrfu;
         itemstats[id].ghost_size--;
-        glrfu->gsize--;
-        ghost_item* git = glrfu->gtail;
-        if (glrfu->ghead == git) {
-            glrfu->ghead = NULL;
-            glrfu->gtail = NULL;
-        } else {
-            glrfu->gtail = git->gprev;
-            // if (git->gprev)
-            //     git->gprev->gnext = NULL;
+        ori_glrfu->gsize--;
+        ghost_item* git = ori_glrfu->gtail;
+        if (git == ori_glrfu->ghead) {
+            ori_glrfu->ghead = git->gnext;
+        }
+        if (git == ori_glrfu->gtail) {
+            ori_glrfu->gtail = git->gprev;
+        }
+        if (git->gprev) {
+            git->gprev->gnext = git->gnext;
+        }
+        if (git->gnext) {
+            git->gnext->gprev = git->gprev;
         }
         ghost_item_remove(git, git->hv, git->hv2, sim);
         ghost_item_free(git);
     }
 }
 
-void ghost_item_lru_push(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim)
+void ghost_item_lru_push(void* glrfu, ghost_item* git, uint8_t id, bool sim)
 {
-    itemstats[id].ghost_size++;
-    glrfu->gsize++;
-    git->gnext = glrfu->ghead;
-    glrfu->ghead = git;
-    if (git->gnext) {
-        git->gnext->gprev = git;
+    if (sim) {
+        glrfu_sim_t* glrfu_sim = (glrfu_sim_t*)glrfu;
+        itemstats[id].sim_ghost_size++;
+        glrfu_sim->gsize++;
+        git->gnext = glrfu_sim->ghead;
+        glrfu_sim->ghead = git;
+        if (git->gnext) {
+            git->gnext->gprev = git;
+        }
+        if (glrfu_sim->gtail == NULL) glrfu_sim->gtail = git;
+        git->gprev = NULL;
+    } else {
+        glrfu_t* ori_glrfu = (glrfu_t*)glrfu;
+        itemstats[id].ghost_size++;
+        ori_glrfu->gsize++;
+        git->gnext = ori_glrfu->ghead;
+        ori_glrfu->ghead = git;
+        if (git->gnext) {
+            git->gnext->gprev = git;
+        }
+        if (ori_glrfu->gtail == NULL) ori_glrfu->gtail = git;
+        git->gprev = NULL;
     }
-    if (glrfu->gtail == NULL) glrfu->gtail = git;
-    git->gprev = NULL;
 }
 
 bool simulator_access(const char *key, const size_t nkey, const uint32_t hv, uint8_t slabclass_id)
@@ -2470,6 +2519,20 @@ ghost_item* sim_assoc_find(const char *key, const size_t nkey, const uint32_t hv
     return git;
 }
 
+void sim_assoc_remove(ghost_item* git, uint32_t hv, uint32_t hv2)
+{
+    ghost_item *gitem = sim_hashtable[hv & GHOST_HASHMASK];
+    if (gitem && gitem->hv2 == hv2) {
+        sim_hashtable[hv & GHOST_HASHMASK] = gitem->hnext;
+        return;
+    }
+    while (gitem->hnext && gitem->hnext->hv2 != hv2) {
+        gitem = gitem->hnext;
+    }
+    assert(gitem->hnext && gitem->hnext->hv2 == hv2);
+    gitem->hnext = gitem->hnext->hnext;
+   
+}
 ghost_item* assoc_insert_sim(ghost_item* git)
 {
     git->hnext = sim_hashtable[git->hv & GHOST_HASHMASK];

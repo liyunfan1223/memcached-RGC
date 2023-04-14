@@ -1713,11 +1713,19 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             do_item_link(it, hv);
             /// TODO: simulator add
             #ifdef WITH_GLRFU
-            ghost_item* git = ghost_item_alloc();
-            git->hv = hv;
-            git->hv2 = hash2(ITEM_key(it), it->nkey);
-            git->slabs_clsid = it->slabs_clsid;
-            do_item_link_sim(git, it->slabs_clsid);
+            ghost_item* old_git = sim_assoc_find(key, it->nkey, hv);
+            if (old_git) {
+                do_item_unlink_q_sim(old_git);
+            }
+            // } else {
+            ghost_item* git2 = ghost_item_alloc();
+            git2->hv = hv;
+            git2->hv2 = hash2(ITEM_key(it), it->nkey);
+            if (hv == 1003261015) {
+                printf("!%u\n", git2->hv2);
+            }
+            git2->slabs_clsid = it->slabs_clsid;
+            do_item_link_sim(git2, it->slabs_clsid);
             #endif
             stored = STORED;
         }
