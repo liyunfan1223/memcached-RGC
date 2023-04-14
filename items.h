@@ -18,6 +18,10 @@ void item_free(item *it);
 bool item_size_ok(const size_t nkey, const int flags, const int nbytes);
 
 int  do_item_link(item *it, const uint32_t hv);     /** may fail if transgresses limits */
+#ifdef WITH_GLRFU
+int do_item_link_sim(ghost_item *git, const uint8_t slabs_clsid);
+void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid);
+#endif
 void do_item_unlink(item *it, const uint32_t hv);
 void do_item_unlink_nolock(item *it, const uint32_t hv);
 void do_item_remove(item *it);
@@ -39,17 +43,66 @@ void *item_lru_bump_buf_create(void);
 #define LRU_PULL_CRAWL_BLOCKS 2
 #define LRU_PULL_RETURN_ITEM 4 /* fill info struct if available */
 
+#ifdef WITH_GLRFU
+/* Yunfan */
+#define GLRFU_MAX_BITS 10
+#define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
+#define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
+#define DEFAULT_INSERTED_LEVEL (1 << 2)
+#define GHOST_HASHSIZE (1 << 16)
+#define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
+#define GHOST_CACHE_RATIO 4
+#define ORIGINAL_DECAY_INTERVAL 2000
+#define SIMULATOR_DECAY_RATIO 1.5f
+#endif
+
 struct lru_pull_tail_return {
     item *it;
     uint32_t hv;
 };
 
+#ifdef WITH_GLRFU
 /* Yunfan */
 struct glrfu_pull_tail_return {
     item *it;
     uint32_t hv;
 };
 
+/* Yunfan */
+typedef struct _glrfu_t {
+    item* heads[GLRFU_MAX_LEVEL];
+    item* tails[GLRFU_MAX_LEVEL];
+    uint32_t lowest_level_non_empty;
+    uint32_t access_ts;
+    uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
+    uint32_t size[GLRFU_MAX_LEVEL];
+    uint32_t decay_interval;
+    uint32_t update_interval;
+    uint32_t total_size;
+    uint32_t gsize;
+    uint32_t interval_hit;
+    ghost_item* ghead;
+    ghost_item* gtail;
+} glrfu_t;
+
+typedef struct _glrfu_sim_t {
+    ghost_item* heads[GLRFU_MAX_LEVEL];
+    ghost_item* tails[GLRFU_MAX_LEVEL];
+    uint32_t lowest_level_non_empty;
+    uint32_t access_ts;
+    uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
+    uint32_t size[GLRFU_MAX_LEVEL];
+    uint32_t decay_interval;
+    uint32_t update_interval;
+    uint32_t total_size;
+    uint32_t gsize;
+    uint32_t interval_hit;
+    ghost_item* ghead;
+    ghost_item* gtail;
+} glrfu_sim_t;
+
+
+#endif
 
 int lru_pull_tail(const int orig_id, const int cur_lru,
         const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
@@ -88,7 +141,7 @@ void do_item_bump(LIBEVENT_THREAD *t, item *it, const uint32_t hv);
 void item_stats_reset(void);
 void glrfu_init(void);
 extern pthread_mutex_t lru_locks[POWER_LARGEST];
-// extern pthread_mutex_t glru_locks[POWER_LARGEST];
+extern pthread_mutex_t sim_locks[POWER_LARGEST];
 
 int start_lru_maintainer_thread(void *arg);
 int stop_lru_maintainer_thread(void);
@@ -96,3 +149,21 @@ void lru_maintainer_pause(void);
 void lru_maintainer_resume(void);
 
 void *lru_bump_buf_create(void);
+
+#ifdef WITH_GLRFU
+void do_item_unlink_q_sim(ghost_item *it);
+ghost_item* ghost_item_alloc(void);
+ghost_item* find_ghost_item(uint32_t hv, uint32_t hv2, bool sim);
+ghost_item* delete_ghost_item(uint32_t hv, uint32_t hv2);
+void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim);
+void ghost_item_insert_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim);
+void ghost_item_remove_maintain(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+void ghost_item_free(ghost_item* git);
+void ghost_item_lru_pop(glrfu_t* glrfu, uint8_t id, bool sim);
+void ghost_item_lru_push(glrfu_t* glrfu, ghost_item* git, uint8_t id, bool sim);
+bool simulator_access(const char *key, const size_t nkey, const uint32_t hv, uint8_t slabclass_id);
+ghost_item* sim_assoc_find(const char *key, const size_t nkey, const uint32_t hv);
+ghost_item* assoc_insert_sim(ghost_item* git);
+void pull_tail_sim(uint8_t id);
+#endif

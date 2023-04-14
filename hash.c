@@ -7,6 +7,7 @@
 #include "xxhash.h"
 
 hash_func hash;
+hash_func hash2;
 
 static uint32_t XXH3_hash(const void *key, size_t length) {
     return (uint32_t)XXH3_64bits(key, length);
@@ -29,5 +30,6 @@ int hash_init(enum hashfunc_type type) {
         default:
             return -1;
     }
+    hash2 = XXH3_hash;
     return 0;
 }

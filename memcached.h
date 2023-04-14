@@ -605,10 +605,14 @@ typedef struct _stritem {
 
 #ifdef WITH_GLRFU
 typedef struct _ghost_item_t {
-    struct _ghost_item_t* ghead;
-    struct _ghost_item_t* gtail;
-    uint32_t        inserted_ts;
-    uint16_t        inserted_lv;
+    struct _ghost_item_t*   gprev;
+    struct _ghost_item_t*   gnext;
+    struct _ghost_item_t*   hnext;
+    uint32_t                inserted_ts;
+    uint16_t                inserted_lv;
+    uint32_t                hv;
+    uint32_t                hv2;
+    uint8_t                 slabs_clsid;
 } ghost_item;
 #endif
 
