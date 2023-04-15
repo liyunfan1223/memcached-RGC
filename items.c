@@ -517,7 +517,7 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
             (gitem ? calc_curr_level(gt_glrfu, gitem->inserted_lv, gitem->inserted_ts) : 0) + DEFAULT_INSERTED_LEVEL, 
             GLRFU_MAX_LEVEL - 1);
         /* ghost item */
-        if (gitem) {
+        if (find_ghost_item(hv, hv2, false)) {
             ghost_item_remove(gitem, hv, hv2, false);
             // if (gt_id != it->slabs_clsid) {
             ghost_item_remove_maintain(gt_glrfu, gitem, gt_id, false);
@@ -858,13 +858,14 @@ void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
             (gitem ? calc_curr_level_sim(gt_glrfu, gitem->inserted_lv, gitem->inserted_ts) : 0) + DEFAULT_INSERTED_LEVEL, 
             GLRFU_MAX_LEVEL - 1);
         /* ghost item */
-            
-            // pthread_mutex_lock(&sim_locks[gt_id]);
-            ghost_item_remove(gitem, hv, hv2, true);
-            ghost_item_remove_maintain((void *)gt_glrfu, gitem, gt_id, true);
-            assert(find_ghost_item(hv, hv2, true) == NULL);
-            // pthread_mutex_lock(&sim_locks[gt_id]);
-            ghost_item_free(gitem);
+            if (find_ghost_item(hv, hv2, true)) {
+                // pthread_mutex_lock(&sim_locks[gt_id]);
+                ghost_item_remove(gitem, hv, hv2, true);
+                ghost_item_remove_maintain((void *)gt_glrfu, gitem, gt_id, true);
+                assert(find_ghost_item(hv, hv2, true) == NULL);
+                // pthread_mutex_lock(&sim_locks[gt_id]);
+                ghost_item_free(gitem);
+            }
         pthread_mutex_unlock(&sim_locks[gt_id]);
     }
 
@@ -948,8 +949,8 @@ void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
 
 void do_item_unlink(item *it, const uint32_t hv) {
     MEMCACHED_ITEM_UNLINK(ITEM_key(it), it->nkey, it->nbytes);
-    // if ((it->it_flags & ITEM_LINKED) != 0) {
-    assert(it->it_flags & ITEM_LINKED);
+    if ((it->it_flags & ITEM_LINKED) != 0) {
+    // assert(it->it_flags & ITEM_LINKED);
         it->it_flags &= ~ITEM_LINKED;
         STATS_LOCK();
         stats_state.curr_bytes -= ITEM_ntotal(it);
@@ -959,7 +960,7 @@ void do_item_unlink(item *it, const uint32_t hv) {
         assoc_delete(ITEM_key(it), it->nkey, hv);
         item_unlink_q(it, hv);
         do_item_remove(it);
-    // }
+    }
 }
 
 /* FIXME: Is it necessary to keep this copy/pasted code? */
@@ -2439,7 +2440,7 @@ void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
         pthread_mutex_lock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
         git->hnext = ghost_hashtable[hv & GHOST_HASHMASK];
         ghost_hashtable[hv & GHOST_HASHMASK] = git;
-        pthread_mutex_lock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
+        pthread_mutex_unlock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     }
 }
 
@@ -2491,6 +2492,7 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
         while (gitem->hnext && gitem->hnext->hv2 != hv2) {
             gitem = gitem->hnext;
         }
+        // assert(1 == 2);
         assert(gitem->hnext && gitem->hnext->hv2 == hv2);
         gitem->hnext = gitem->hnext->hnext;
         pthread_mutex_unlock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
