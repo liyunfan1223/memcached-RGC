@@ -136,23 +136,20 @@ static pthread_mutex_t sim_hashtable_mutex[GHOST_HASHSIZE];
 static ghost_item* ghost_hashtable[GHOST_HASHSIZE];
 static ghost_item* sim_ghost_hashtable[GHOST_HASHSIZE];
 static pthread_mutex_t sim_ghost_hashtable_mutex[GHOST_HASHSIZE];
+static pthread_mutex_t ghost_hashtable_mutex[GHOST_HASHSIZE];
 
 static uint8_t last_access_slabclass_id = 0;
 static uint8_t sim_last_access_slabclass_id = 0;
+
+static double double_abs(double a) {
+    return a > 0 ? a : -a;
+}
 #endif
 
 static volatile int do_run_lru_maintainer_thread = 0;
 static pthread_mutex_t lru_maintainer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t cas_id_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t stats_sizes_lock = PTHREAD_MUTEX_INITIALIZER;
-
-// void ghost_hashtable_init() {
-
-// }
-
-static double double_abs(double a) {
-    return a > 0 ? a : -a;
-}
 
 void item_stats_reset(void) {
     int i;
@@ -1590,7 +1587,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
         const uint64_t total_bytes, const uint8_t flags, const rel_time_t max_age,
         struct lru_pull_tail_return *ret_it) {
     item *it = NULL;
-    uint32_t it_hv;
+    uint32_t it_hv=0;
     int id = orig_id;
     int removed = 0;
     if (id == 0)
@@ -2370,6 +2367,8 @@ item *do_item_crawl_q(item *it) {
 #ifdef WITH_GLRFU
 ghost_item* find_ghost_item(uint32_t hv, uint32_t hv2, bool sim /*false*/)
 {
+    // mutex or not?
+    pthread_mutex_lock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     ghost_item *gitem;
     if (sim) {
         gitem = sim_ghost_hashtable[hv & GHOST_HASHMASK];
@@ -2380,6 +2379,7 @@ ghost_item* find_ghost_item(uint32_t hv, uint32_t hv2, bool sim /*false*/)
         gitem = gitem->hnext;
     }
     // assert(gitem && gitem->hv2);
+    pthread_mutex_unlock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     return gitem;
 }
 
@@ -2430,11 +2430,16 @@ void ghost_item_free(ghost_item* git)
 void ghost_item_insert(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* false */)
 {
     if (sim) {
+        // need this mutex?
+        pthread_mutex_lock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
         git->hnext = sim_ghost_hashtable[hv & GHOST_HASHMASK];
         sim_ghost_hashtable[hv & GHOST_HASHMASK] = git;
+        pthread_mutex_unlock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     } else {
+        pthread_mutex_lock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
         git->hnext = ghost_hashtable[hv & GHOST_HASHMASK];
         ghost_hashtable[hv & GHOST_HASHMASK] = git;
+        pthread_mutex_lock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     }
 }
 
@@ -2462,9 +2467,11 @@ void ghost_item_insert_maintain(void* glrfu, ghost_item* git, uint8_t id, bool s
 void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* false */)
 {
     if (sim) {
+        pthread_mutex_lock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
         ghost_item *gitem = sim_ghost_hashtable[hv & GHOST_HASHMASK];
         if (gitem && gitem->hv2 == hv2) {
             sim_ghost_hashtable[hv & GHOST_HASHMASK] = gitem->hnext;
+            pthread_mutex_unlock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
             return;
         }
         while (gitem->hnext && gitem->hnext->hv2 != hv2) {
@@ -2472,10 +2479,13 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
         }
         assert(gitem->hnext && gitem->hnext->hv2 == hv2);
         gitem->hnext = gitem->hnext->hnext;
+        pthread_mutex_unlock(&sim_ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     } else {
+        pthread_mutex_lock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
         ghost_item *gitem = ghost_hashtable[hv & GHOST_HASHMASK];
         if (gitem && gitem->hv2 == hv2) {
             ghost_hashtable[hv & GHOST_HASHMASK] = gitem->hnext;
+            pthread_mutex_unlock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
             return;
         }
         while (gitem->hnext && gitem->hnext->hv2 != hv2) {
@@ -2483,6 +2493,7 @@ void ghost_item_remove(ghost_item* git, uint32_t hv, uint32_t hv2, bool sim/* fa
         }
         assert(gitem->hnext && gitem->hnext->hv2 == hv2);
         gitem->hnext = gitem->hnext->hnext;
+        pthread_mutex_unlock(&ghost_hashtable_mutex[hv & GHOST_HASHMASK]);
     }
 }
 
