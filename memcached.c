@@ -1721,9 +1721,6 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             ghost_item* git2 = ghost_item_alloc();
             git2->hv = hv;
             git2->hv2 = hash2(ITEM_key(it), it->nkey);
-            if (hv == 1003261015) {
-                printf("!%u\n", git2->hv2);
-            }
             git2->slabs_clsid = it->slabs_clsid;
             do_item_link_sim(git2, it->slabs_clsid);
             #endif

@@ -5,7 +5,7 @@ import time
 # 127.0.0.1 代表服务器IP地址，因为我们得memcached安装在本地，所以其IP地址为127.0.0.1
 # 11211 代表端口号，memcached默认端口号为 11211
 # debug=True 这个表示开启调试模式
-mc = memcache.Client(["127.0.0.1:11211"],debug=True)
+mc = memcache.Client(["127.0.0.1:11211"],debug=True,socket_timeout=600)
 # set() 第1个值为key[必须];第2个值为value[必须];第三个值为存活时间[可选]，默认为3小时;关于set更多参数可点击set进去查看
 
 random.seed(42)
@@ -108,6 +108,7 @@ def test_trace(file_name):
             k, r, _, _ = lines.strip().split()
             for i in range(int(r)):
                 key = int(k) + i
+                # print("!", key)
                 access_attach(str(key))
                 idx += 1
                 if idx % 10000 == 0:

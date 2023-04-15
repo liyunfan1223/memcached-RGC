@@ -44,7 +44,6 @@ void *item_lru_bump_buf_create(void);
 #define LRU_PULL_RETURN_ITEM 4 /* fill info struct if available */
 
 #ifdef WITH_GLRFU
-/* Yunfan */
 #define GLRFU_MAX_BITS 10
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
@@ -52,8 +51,9 @@ void *item_lru_bump_buf_create(void);
 #define GHOST_HASHSIZE (1 << 16)
 #define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
 #define GHOST_CACHE_RATIO 4
-#define ORIGINAL_DECAY_INTERVAL 200000000
-#define SIMULATOR_DECAY_RATIO 1.5f
+#define ORIGINAL_DECAY_INTERVAL 200
+#define SIMULATOR_DECAY_RATIO 100000.0f
+#define GITEM_PER_ALLOC 1024
 #endif
 
 struct lru_pull_tail_return {
@@ -62,7 +62,6 @@ struct lru_pull_tail_return {
 };
 
 #ifdef WITH_GLRFU
-/* Yunfan */
 struct glrfu_pull_tail_return {
     item *it;
     uint32_t hv;
@@ -77,6 +76,7 @@ typedef struct _glrfu_t {
     uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
     uint32_t size[GLRFU_MAX_LEVEL];
     uint32_t decay_interval;
+    uint32_t next_decay_ts;
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;
@@ -93,6 +93,7 @@ typedef struct _glrfu_sim_t {
     uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
     uint32_t size[GLRFU_MAX_LEVEL];
     uint32_t decay_interval;
+    uint32_t next_decay_ts;
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;
@@ -164,6 +165,7 @@ void ghost_item_lru_pop(void* glrfu, uint8_t id, bool sim);
 void ghost_item_lru_push(void* glrfu, ghost_item* git, uint8_t id, bool sim);
 bool simulator_access(const char *key, const size_t nkey, const uint32_t hv, uint8_t slabclass_id);
 ghost_item* sim_assoc_find(const char *key, const size_t nkey, const uint32_t hv);
+ghost_item* sim_assoc_find_byhv(const uint32_t hv, const uint32_t hv2);
 void sim_assoc_remove(ghost_item* git, uint32_t hv, uint32_t hv2);
 ghost_item* assoc_insert_sim(ghost_item* git);
 void pull_tail_sim(uint8_t id);
