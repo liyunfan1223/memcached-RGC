@@ -88,16 +88,16 @@ void glrfu_init(void)
         glrfus[i].access_ts = 0;
         glrfus[i].decay_interval = ORIGINAL_DECAY_INTERVAL;
         glrfus[i].next_decay_ts = ORIGINAL_DECAY_INTERVAL;
-        glrfus[i].update_interval = 20000;
+        glrfus[i].update_interval = 10000;
         memset(glrfus[i].decay_ts, 0, sizeof(glrfus[i].decay_ts));
         memset(glrfus[i].size, 0, sizeof(glrfus[i].size));
     }
 
     for (uint32_t i = 0; i < LARGEST_ID; i++) {
         glrfus_sim[i].access_ts = 0;
-        glrfus_sim[i].decay_interval = ORIGINAL_DECAY_INTERVAL * SIMULATOR_DECAY_RATIO;
-        glrfus_sim[i].next_decay_ts = ORIGINAL_DECAY_INTERVAL * SIMULATOR_DECAY_RATIO;
-        glrfus_sim[i].update_interval = 20000;
+        glrfus_sim[i].decay_interval = ORIGINAL_DECAY_INTERVAL / SIMULATOR_DECAY_RATIO;
+        glrfus_sim[i].next_decay_ts = ORIGINAL_DECAY_INTERVAL / SIMULATOR_DECAY_RATIO;
+        glrfus_sim[i].update_interval = 10000;
         memset(glrfus_sim[i].decay_ts, 0, sizeof(glrfus_sim[i].decay_ts));
         memset(glrfus_sim[i].size, 0, sizeof(glrfus_sim[i].size));
     }
@@ -149,6 +149,10 @@ static pthread_mutex_t stats_sizes_lock = PTHREAD_MUTEX_INITIALIZER;
 // void ghost_hashtable_init() {
 
 // }
+
+static double double_abs(double a) {
+    return a > 0 ? a : -a;
+}
 
 void item_stats_reset(void) {
     int i;
@@ -533,7 +537,7 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
     /* Yunfan */
     glrfu_t* glrfu = &glrfus[it->slabs_clsid];
     glrfu->access_ts++;
-    glrfu->interval_hit++;
+    // glrfu->interval_hit++;
     uint32_t inserted_lv = MIN(
         (gitem ? calc_curr_level(glrfu, gitem->inserted_lv, gitem->inserted_ts) : 0) + DEFAULT_INSERTED_LEVEL, 
         GLRFU_MAX_LEVEL - 1);
@@ -562,7 +566,60 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
         ghost_item_free(gitem);
     }
 
-    if (glrfu->decay_interval && glrfu->access_ts % glrfu->decay_interval == 0) {
+    // if (glrfu->decay_interval && glrfu->access_ts % glrfu->decay_interval == 0) {
+    if (glrfu->access_ts % glrfu->update_interval == 0) {
+        uint32_t interval_hits = itemstats[it->slabs_clsid].hits - glrfu->last_update_hits;
+        uint32_t interval_misses = itemstats[it->slabs_clsid].est_misses - glrfu->last_update_misses;
+
+        uint32_t interval_hits_sim = itemstats[it->slabs_clsid].sim_hits - glrfu->last_update_hits_sim;
+        uint32_t interval_misses_sim = itemstats[it->slabs_clsid].sim_est_misses - glrfu->last_update_misses_sim;
+
+        glrfu->last_update_hits = itemstats[it->slabs_clsid].hits;
+        glrfu->last_update_misses = itemstats[it->slabs_clsid].est_misses;
+        glrfu->last_update_hits_sim = itemstats[it->slabs_clsid].sim_hits;
+        glrfu->last_update_misses_sim = itemstats[it->slabs_clsid].sim_est_misses;
+
+        double hit_ratio = (double)interval_hits / (interval_hits + interval_misses);
+        double hit_ratio_sim = (double)interval_hits_sim / (interval_hits_sim + interval_misses_sim);
+        if (hit_ratio != 0 && hit_ratio_sim != 0) {
+            if (double_abs(hit_ratio - hit_ratio_sim) >= EPSILON) {
+                glrfu->stable_count = 0;
+                if (hit_ratio_sim > hit_ratio) {
+                    double delta_ratio = (hit_ratio_sim / hit_ratio - 1);
+                    glrfu->decay_interval /= 1 + delta_ratio * LAMBDA;
+                } else {
+                    double delta_ratio = (hit_ratio / hit_ratio_sim - 1);
+                    glrfu->decay_interval *= 1 + delta_ratio * LAMBDA;
+                }
+            } else {
+                glrfu->stable_count++;
+                if (glrfu->stable_count == 5) {
+                    if (glrfu->decay_interval < ORIGINAL_DECAY_INTERVAL) {
+                        glrfu->decay_interval *= 1 + 0.1;
+                    } else {
+                        glrfu->decay_interval /= 1 + 0.1;
+                    }
+                    glrfu->stable_count = 0;
+                }
+            }
+        }
+        if (glrfu->decay_interval < 200) {
+            glrfu->decay_interval = 200;
+        }
+        if (glrfu->decay_interval > 1e8) {
+            glrfu->decay_interval  = 1e8;
+        }
+        glrfu->next_decay_ts = MIN(glrfu->next_decay_ts, glrfu->access_ts + glrfu->decay_interval);
+        pthread_mutex_lock(&sim_locks[it->slabs_clsid]);
+        glrfu_sim_t* glrfu_sim = &glrfus_sim[it->slabs_clsid];
+        glrfu_sim->decay_interval = glrfu->decay_interval / SIMULATOR_DECAY_RATIO;
+        glrfu_sim->next_decay_ts = MIN(glrfu_sim->next_decay_ts, glrfu_sim->access_ts + glrfu_sim->decay_interval);
+        pthread_mutex_unlock(&sim_locks[it->slabs_clsid]);
+        printf("%u %u %f %f\n", glrfu->decay_interval, glrfu_sim->decay_interval, hit_ratio, hit_ratio_sim);
+    }
+
+    if (glrfu->next_decay_ts <= glrfu->access_ts) {
+        glrfu->next_decay_ts = glrfu->access_ts + glrfu->decay_interval;
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
             if (glrfu->heads[i] == NULL) {
                 continue;
@@ -822,7 +879,8 @@ void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
         ghost_item_free(gitem);
     }
 
-    if (glrfu->decay_interval && glrfu->access_ts % glrfu->decay_interval == 0) {
+    if (glrfu->next_decay_ts <= glrfu->access_ts) {
+        glrfu->next_decay_ts = glrfu->access_ts + glrfu->decay_interval;
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
             if (glrfu->heads[i] == NULL) {
                 continue;
@@ -1354,6 +1412,7 @@ item *do_item_get(const char *key, const size_t nkey, const uint32_t hv, LIBEVEN
         } else {
             itemstats[git->slabs_clsid].sim_hits += 1;
             /// TODO: do_item_bump_sim
+            
         }
     }
     #endif
@@ -1681,7 +1740,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     }
     // assert(tries == 5);
 #ifdef WITH_GLRFU
-    assert(it || !(flags & LRU_PULL_EVICT));
+    // assert(it || !(flags & LRU_PULL_EVICT));
 #endif
     pthread_mutex_unlock(&lru_locks[id]);
 

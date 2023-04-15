@@ -48,12 +48,15 @@ void *item_lru_bump_buf_create(void);
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
 #define DEFAULT_INSERTED_LEVEL (1 << 2)
-#define GHOST_HASHSIZE (1 << 16)
+#define EST_ITEM_COUNTS (1 << 12)
+#define GHOST_HASHSIZE (EST_ITEM_COUNTS << 2)
 #define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
 #define GHOST_CACHE_RATIO 4
-#define ORIGINAL_DECAY_INTERVAL 200
-#define SIMULATOR_DECAY_RATIO 100000.0f
+#define ORIGINAL_DECAY_INTERVAL (EST_ITEM_COUNTS << 2) // 默认cur_half=4
+#define SIMULATOR_DECAY_RATIO 1.5f
 #define GITEM_PER_ALLOC 1024
+#define EPSILON (1e-8)
+#define LAMBDA 5
 #endif
 
 struct lru_pull_tail_return {
@@ -80,7 +83,11 @@ typedef struct _glrfu_t {
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;
-    uint32_t interval_hit;
+    uint32_t last_update_hits;
+    uint32_t last_update_hits_sim;
+    uint32_t last_update_misses;
+    uint32_t last_update_misses_sim;
+    uint32_t stable_count;
     ghost_item* ghead;
     ghost_item* gtail;
 } glrfu_t;

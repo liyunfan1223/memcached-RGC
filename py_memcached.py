@@ -15,7 +15,7 @@ kBigPrime = 0x5bd1e995
 kBigInt = 1 << 62
 mp = {}
 # print(kBigPrime, kBigInt)
-value_len = 4 * 1024
+value_len = 64 * 1024
 value_to_set = ''
 # for i in range(value_len):
 value_to_set = 'v' * value_len
@@ -120,8 +120,8 @@ if __name__ == "__main__":
     cur_time = time.time()
     # test_trace("traces/OLTP.lis")
     # test_trace("traces/readrandom_5.lis")
-    # test_trace("traces/P1.lis")
-    test_trace("traces/P4.lis")
+    test_trace("traces/P1.lis")
+    # test_trace("traces/P4.lis")
     # test_3()
     # test_1()
     report()
