@@ -1711,11 +1711,16 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
 
         if (do_store) {
             do_item_link(it, hv);
-            /// TODO: simulator add
-            #ifdef WITH_GLRFU
+            // /// TODO: simulator add
+#ifdef WITH_GLRFU
             ghost_item* old_git = sim_assoc_find(key, it->nkey, hv);
             if (old_git) {
-                do_item_unlink_q_sim(old_git);
+                pthread_mutex_lock(&sim_locks[old_git->slabs_clsid]);
+                // double check
+                if (sim_assoc_find(key, it->nkey, hv)) {
+                    do_item_unlink_q_sim(old_git);
+                }
+                pthread_mutex_unlock(&sim_locks[old_git->slabs_clsid]);
             }
             // } else {
             ghost_item* git2 = ghost_item_alloc();
@@ -1723,7 +1728,7 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             git2->hv2 = hash2(ITEM_key(it), it->nkey);
             git2->slabs_clsid = it->slabs_clsid;
             do_item_link_sim(git2, it->slabs_clsid);
-            #endif
+#endif
             stored = STORED;
         }
     }
