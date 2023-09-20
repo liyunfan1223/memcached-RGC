@@ -75,11 +75,11 @@ typedef struct _glrfu_t {
     item* heads[GLRFU_MAX_LEVEL];
     item* tails[GLRFU_MAX_LEVEL];
     uint32_t lowest_level_non_empty;
-    uint32_t access_ts;
+    uint64_t access_ts;
     uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
     uint32_t size[GLRFU_MAX_LEVEL];
-    uint32_t decay_interval;
-    uint32_t next_decay_ts;
+    uint64_t decay_interval;
+    uint64_t next_decay_ts;
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;

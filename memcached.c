@@ -1722,7 +1722,6 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
                 }
                 pthread_mutex_unlock(&sim_locks[old_git->slabs_clsid]);
             }
-            // } else {
             ghost_item* git2 = ghost_item_alloc();
             git2->hv = hv;
             git2->hv2 = hash2(ITEM_key(it), it->nkey);
