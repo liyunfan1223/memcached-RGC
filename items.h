@@ -44,19 +44,19 @@ void *item_lru_bump_buf_create(void);
 #define LRU_PULL_RETURN_ITEM 4 /* fill info struct if available */
 
 #ifdef WITH_GLRFU
-#define GLRFU_MAX_BITS 10
+#define GLRFU_MAX_BITS 6
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
 #define DEFAULT_INSERTED_LEVEL (1 << 2)
-#define EST_ITEM_COUNTS (1 << 12)
+#define EST_ITEM_COUNTS (1 << 16)
 #define GHOST_HASHSIZE (EST_ITEM_COUNTS << 2)
 #define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
 #define GHOST_CACHE_RATIO 4
-#define ORIGINAL_DECAY_INTERVAL (EST_ITEM_COUNTS << 2) // 默认cur_half=4
+#define ORIGINAL_DECAY_INTERVAL (EST_ITEM_COUNTS << 4) // 默认cur_half=16
 #define SIMULATOR_DECAY_RATIO 1.5f
 #define GITEM_PER_ALLOC 1024
 #define EPSILON (1e-8)
-#define LAMBDA 5
+#define LAMBDA 1
 #endif
 
 struct lru_pull_tail_return {

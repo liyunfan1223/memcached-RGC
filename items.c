@@ -92,7 +92,7 @@ void glrfu_init(void)
         memset(glrfus[i].decay_ts, 0, sizeof(glrfus[i].decay_ts));
         memset(glrfus[i].size, 0, sizeof(glrfus[i].size));
     }
-
+    assert(false);
     for (uint32_t i = 0; i < LARGEST_ID; i++) {
         glrfus_sim[i].access_ts = 0;
         glrfus_sim[i].decay_interval = ORIGINAL_DECAY_INTERVAL / SIMULATOR_DECAY_RATIO;
@@ -588,6 +588,11 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
         uint32_t interval_hits_sim = itemstats[it->slabs_clsid].sim_hits - glrfu->last_update_hits_sim;
         uint32_t interval_misses_sim = itemstats[it->slabs_clsid].sim_est_misses - glrfu->last_update_misses_sim;
 
+        assert(itemstats[it->slabs_clsid].hits > glrfu->last_update_hits);
+        assert(itemstats[it->slabs_clsid].est_misses > glrfu->last_update_misses);
+        assert(itemstats[it->slabs_clsid].sim_hits > glrfu->last_update_hits_sim);
+        assert(itemstats[it->slabs_clsid].sim_est_misses > glrfu->last_update_misses_sim);
+
         glrfu->last_update_hits = itemstats[it->slabs_clsid].hits;
         glrfu->last_update_misses = itemstats[it->slabs_clsid].est_misses;
         glrfu->last_update_hits_sim = itemstats[it->slabs_clsid].sim_hits;
@@ -602,9 +607,11 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
                 glrfu->stable_count = 0;
                 if (hit_ratio_sim > hit_ratio) {
                     double delta_ratio = (hit_ratio_sim / hit_ratio - 1);
+                    delta_ratio = MIN(1, delta_ratio);
                     glrfu->decay_interval /= 1 + delta_ratio * LAMBDA;
                 } else {
                     double delta_ratio = (hit_ratio / hit_ratio_sim - 1);
+                    delta_ratio = MIN(1, delta_ratio);
                     glrfu->decay_interval *= 1 + delta_ratio * LAMBDA;
                 }
             } else {
@@ -1636,7 +1643,8 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
         }
     }
     if (lowest < GLRFU_MAX_LEVEL)
-        search = glrfu->tails[lowest];
+        // search = glrfu->tails[lowest];
+        search = glrfu->heads[lowest];
     else
         search = NULL;
     assert(search || !(flags & LRU_PULL_EVICT));
@@ -1648,7 +1656,7 @@ int lru_pull_tail(const int orig_id, const int cur_lru,
     for (; tries > 0 && search != NULL; tries--, search=next_it) {
         /* we might relink search mid-loop, so search->prev isn't reliable */
 #ifdef WITH_GLRFU
-        next_it = search->mprev;
+        next_it = search->mnext;
 #else
         next_it = search->prev;
 #endif
@@ -2713,12 +2721,14 @@ void pull_tail_sim(uint8_t id)
     }
     ghost_item* search;
     if (lowest < GLRFU_MAX_LEVEL)
-        search = glrfu->tails[lowest];
+        search = glrfu->heads[lowest];
     else
         search = NULL;
+    
     assert(search);
     if (search) {
         do_item_unlink_q_sim(search);
     }
 }
+
 #endif
