@@ -92,7 +92,7 @@ void glrfu_init(void)
         memset(glrfus[i].decay_ts, 0, sizeof(glrfus[i].decay_ts));
         memset(glrfus[i].size, 0, sizeof(glrfus[i].size));
     }
-    assert(false);
+    
     for (uint32_t i = 0; i < LARGEST_ID; i++) {
         glrfus_sim[i].access_ts = 0;
         glrfus_sim[i].decay_interval = ORIGINAL_DECAY_INTERVAL / SIMULATOR_DECAY_RATIO;
