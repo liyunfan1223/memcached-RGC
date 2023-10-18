@@ -47,13 +47,16 @@ void *item_lru_bump_buf_create(void);
 #define GLRFU_MAX_BITS 6
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
-#define DEFAULT_INSERTED_LEVEL (1 << 2)
-#define EST_ITEM_COUNTS (1 << 16)
-#define GHOST_HASHSIZE (EST_ITEM_COUNTS << 2)
-#define GHOST_HASHMASK (GHOST_HASHSIZE - 1)
+#define DEFAULT_INSERTED_LEVEL (1 << 0)
+#define EST_SLABS 3
+// #define EST_ITEM_COUNTS (1 << 16)
+// #define GHOST_HASHSIZE (EST_ITEM_COUNTS << 2)
+// #define ghost_hash_mask (GHOST_HASHSIZE - 1)
+#define TOP_LRU_TS (1 << 31)
 #define GHOST_CACHE_RATIO 4
 #define ORIGINAL_DECAY_INTERVAL (EST_ITEM_COUNTS << 4) // 默认cur_half=16
 #define SIMULATOR_DECAY_RATIO 1.5f
+// #define SIMULATOR_DECAY_RATIO 1.0f
 #define GITEM_PER_ALLOC 1024
 #define EPSILON (1e-8)
 #define LAMBDA 1
@@ -79,7 +82,12 @@ typedef struct _glrfu_t {
     uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
     uint32_t size[GLRFU_MAX_LEVEL];
     uint64_t decay_interval;
-    uint64_t next_decay_ts;
+    uint32_t next_decay_ts;
+    uint32_t prev_decay_ts;
+    item* top_head;
+    item* top_tail;
+    uint32_t top_lru_size;
+    uint32_t top_lru_max_size;
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;
@@ -99,8 +107,13 @@ typedef struct _glrfu_sim_t {
     uint32_t access_ts;
     uint32_t decay_ts[GLRFU_MAX_DECAY_TS];
     uint32_t size[GLRFU_MAX_LEVEL];
-    uint32_t decay_interval;
+    uint64_t decay_interval;
     uint32_t next_decay_ts;
+    uint32_t prev_decay_ts;
+    ghost_item* top_head;
+    ghost_item* top_tail;
+    uint32_t top_lru_size;
+    uint32_t top_lru_max_size;
     uint32_t update_interval;
     uint32_t total_size;
     uint32_t gsize;
@@ -108,7 +121,6 @@ typedef struct _glrfu_sim_t {
     ghost_item* ghead;
     ghost_item* gtail;
 } glrfu_sim_t;
-
 
 #endif
 

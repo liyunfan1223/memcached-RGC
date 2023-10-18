@@ -288,6 +288,7 @@ static void settings_init(void) {
     settings.drop_privileges = false;
     settings.watch_enabled = true;
     settings.read_buf_mem_limit = 0;
+    settings.estimate_item_counts = 1 << 16;
 #ifdef MEMCACHED_DEBUG
     settings.relaxed_privileges = false;
 #endif
@@ -4968,6 +4969,7 @@ int main (int argc, char **argv) {
           "e:"  /* mmap path for external item memory */
           "o:"  /* Extended generic options */
           "N:"  /* NAPI ID based thread selection */
+          "E:" /* Estimated item counts*/
           ;
 
     /* process arguments */
@@ -5009,6 +5011,7 @@ int main (int argc, char **argv) {
         {"memory-file", required_argument, 0, 'e'},
         {"extended", required_argument, 0, 'o'},
         {"napi-ids", required_argument, 0, 'N'},
+        {"estimate-item-counts", required_argument, 0, 'E'},
         {0, 0, 0, 0}
     };
     int optindex;
@@ -5123,6 +5126,9 @@ int main (int argc, char **argv) {
             break;
         case 'e':
             settings.memory_file = optarg;
+            break;
+        case 'E':
+            settings.estimate_item_counts = ((size_t)atoi(optarg));
             break;
         case 'f':
             settings.factor = atof(optarg);

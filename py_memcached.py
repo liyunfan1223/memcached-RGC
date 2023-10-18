@@ -121,7 +121,7 @@ if __name__ == "__main__":
     # test_trace("traces/OLTP.lis")
     # test_trace("traces/readrandom_5.lis")
     # test_trace("traces/P1.lis")
-    test_trace("traces/P4.lis")
+    test_trace("traces/OLTP.lis")
     # test_3()
     # test_1()
     report()
