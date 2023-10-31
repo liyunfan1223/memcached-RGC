@@ -4969,7 +4969,7 @@ int main (int argc, char **argv) {
           "e:"  /* mmap path for external item memory */
           "o:"  /* Extended generic options */
           "N:"  /* NAPI ID based thread selection */
-          "E:" /* Estimated item counts*/
+          "E:"  /* Estimated item counts*/
           ;
 
     /* process arguments */

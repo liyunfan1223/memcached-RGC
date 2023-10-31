@@ -48,7 +48,7 @@ void *item_lru_bump_buf_create(void);
 #define GLRFU_MAX_DECAY_TS GLRFU_MAX_BITS
 #define GLRFU_MAX_LEVEL (1 << GLRFU_MAX_BITS)
 #define DEFAULT_INSERTED_LEVEL (1 << 0)
-#define EST_SLABS 3
+#define EST_SLABS 4
 // #define EST_ITEM_COUNTS (1 << 16)
 // #define GHOST_HASHSIZE (EST_ITEM_COUNTS << 2)
 // #define ghost_hash_mask (GHOST_HASHSIZE - 1)

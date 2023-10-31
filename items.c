@@ -111,9 +111,10 @@ void glrfu_init(void)
         glrfus[i].access_ts = 0;
         glrfus[i].decay_interval = original_decay_interval;
         glrfus[i].next_decay_ts = original_decay_interval;
-        glrfus[i].update_interval = settings.estimate_item_counts / EST_SLABS;
+        glrfus[i].prev_decay_ts = 0;
+        glrfus[i].update_interval = MIN(10000, settings.estimate_item_counts / EST_SLABS);
         glrfus[i].top_lru_size = 0;
-        glrfus[i].top_lru_max_size = 0.1 * settings.estimate_item_counts / EST_SLABS;
+        glrfus[i].top_lru_max_size = 0.05 * settings.estimate_item_counts / EST_SLABS;
         memset(glrfus[i].decay_ts, 0, sizeof(glrfus[i].decay_ts));
         memset(glrfus[i].size, 0, sizeof(glrfus[i].size));
     }
@@ -122,9 +123,10 @@ void glrfu_init(void)
         glrfus_sim[i].access_ts = 0;
         glrfus_sim[i].decay_interval = original_decay_interval / SIMULATOR_DECAY_RATIO;
         glrfus_sim[i].next_decay_ts = original_decay_interval / SIMULATOR_DECAY_RATIO;
-        glrfus_sim[i].update_interval = settings.estimate_item_counts / EST_SLABS;
+        glrfus_sim[i].prev_decay_ts = 0;
+        glrfus_sim[i].update_interval = MIN(10000, settings.estimate_item_counts / EST_SLABS);
         glrfus[i].top_lru_size = 0;
-        glrfus_sim[i].top_lru_max_size = 0.1 * settings.estimate_item_counts / EST_SLABS;
+        glrfus_sim[i].top_lru_max_size = 0.05 * settings.estimate_item_counts / EST_SLABS;
         memset(glrfus_sim[i].decay_ts, 0, sizeof(glrfus_sim[i].decay_ts));
         memset(glrfus_sim[i].size, 0, sizeof(glrfus_sim[i].size));
     }
@@ -702,16 +704,17 @@ static void do_item_link_q(item *it, uint32_t hv) { /* item is the new head */
         if (glrfu->decay_interval > 1e18) {
             glrfu->decay_interval  = 1e18;
         }
-        glrfu->next_decay_ts = MIN(glrfu->next_decay_ts, glrfu->access_ts + glrfu->decay_interval);
+        glrfu->next_decay_ts = glrfu->prev_decay_ts + glrfu->decay_interval;
         pthread_mutex_lock(&sim_locks[it->slabs_clsid]);
         glrfu_sim_t* glrfu_sim = &glrfus_sim[it->slabs_clsid];
         glrfu_sim->decay_interval = glrfu->decay_interval / SIMULATOR_DECAY_RATIO;
-        glrfu_sim->next_decay_ts = MIN(glrfu_sim->next_decay_ts, glrfu_sim->access_ts + glrfu_sim->decay_interval);
+        glrfu_sim->next_decay_ts = glrfu_sim->prev_decay_ts + glrfu_sim->decay_interval;
         pthread_mutex_unlock(&sim_locks[it->slabs_clsid]);
         
     }
 
     if (glrfu->next_decay_ts <= glrfu->access_ts) {
+        glrfu->prev_decay_ts = glrfu->access_ts;
         glrfu->next_decay_ts = glrfu->access_ts + glrfu->decay_interval;
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
             if (glrfu->heads[i] == NULL) {
@@ -1039,6 +1042,7 @@ void do_item_link_q_sim(ghost_item* git, uint8_t slabs_clsid)
     if (*gtail == 0) *gtail = git;
     assoc_insert_sim(git);
     if (glrfu->next_decay_ts <= glrfu->access_ts) {
+        glrfu->prev_decay_ts = glrfu->access_ts;
         glrfu->next_decay_ts = glrfu->access_ts + glrfu->decay_interval;
         for (uint32_t i = 1; i < GLRFU_MAX_LEVEL; i++) {
             if (glrfu->heads[i] == NULL) {
