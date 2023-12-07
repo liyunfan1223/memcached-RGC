@@ -514,7 +514,7 @@ static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
         it->next = p->slots;
         if (it->next) it->next->prev = it;
         p->slots = it;
-// #ifdef WITH_GLRFU
+// #ifdef WITH_HILL
 //         it->inserted_lv = 0;
 //         it->inserted_ts = 0;
 //         it->mprev = NULL;

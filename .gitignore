@@ -34,7 +34,7 @@ memcached_dtrace.h
 memcached-*.tar.gz
 memcached-*.tar.gz.sha1
 /sizes
-/version.m4
+# /version.m4
 /version.num
 /testapp
 /timedrun

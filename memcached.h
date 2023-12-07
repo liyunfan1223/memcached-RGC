@@ -23,9 +23,9 @@
 /* need this to get IOV_MAX on some platforms. */
 #ifndef __need_IOV_MAX
 #define __need_IOV_MAX
-#define WITH_GLRFU
-#define WITH_GLRFU_ITEM
 #endif
+// #define WITH_HILL
+// #define WITH_HILL_ITEM
 #include <limits.h>
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
@@ -586,7 +586,7 @@ typedef struct _stritem {
     uint8_t         slabs_clsid;/* which slab class we're in */
     uint8_t         nkey;       /* key length, w/terminating null and padding */
     
-#ifdef WITH_GLRFU_ITEM
+#ifdef WITH_HILL_ITEM
     struct _stritem *mnext;
     struct _stritem *mprev;
     uint32_t        inserted_ts;
@@ -604,7 +604,7 @@ typedef struct _stritem {
     /* then data with terminating \r\n (no terminating null; it's binary!) */
 } item;
 
-#ifdef WITH_GLRFU
+#ifdef WITH_HILL
 typedef struct _ghost_item_t {
     struct _ghost_item_t*   gprev;
     struct _ghost_item_t*   gnext;

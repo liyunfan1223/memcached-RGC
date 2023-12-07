@@ -1,19 +1,7 @@
-# Memcached
+# MemHC
 
-Memcached is a high performance multithreaded event-based key/value cache
-store intended to be used in a distributed system.
-
-See: https://memcached.org/about
-
-A fun story explaining usage: https://memcached.org/tutorial
-
-If you're having trouble, try the wiki: https://memcached.org/wiki
-
-If you're trying to troubleshoot odd behavior or timeouts, see:
-https://memcached.org/timeouts
-
-https://memcached.org/ is a good resource in general. Please use the mailing
-list to ask questions, github issues aren't seen by everyone!
+MemHC is a high performance multithreaded event-based key/value cache
+store, modified based on Memcached. MemHC use Hill-Cache cache replacement policy to help the system achieve better hit rate results.
 
 ## Dependencies
 
@@ -22,6 +10,13 @@ list to ask questions, github issues aren't seen by everyone!
   better security. Tested only on x86-64 architectures.
 * openssl (optional) - enables TLS support. need relatively up to date
   version. pkg-config is needed to find openssl dependencies (such as -lz).
+
+
+## Build
+```
+./configure --prefix=/path/to/memhc
+make -j$(nproc) && make install
+```
 
 ## Environment
 

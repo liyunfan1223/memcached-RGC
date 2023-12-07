@@ -1713,7 +1713,7 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
         if (do_store) {
             do_item_link(it, hv);
             // /// TODO: simulator add
-#ifdef WITH_GLRFU
+#ifdef WITH_HILL
             ghost_item* old_git = sim_assoc_find(key, it->nkey, hv);
             if (old_git) {
                 pthread_mutex_lock(&sim_locks[old_git->slabs_clsid]);
@@ -6058,8 +6058,8 @@ int main (int argc, char **argv) {
     /* In restartable mode and we've decided to issue a fixup on memory */
 
     /* Yunfan */
-#ifdef WITH_GLRFU
-    glrfu_init();
+#ifdef WITH_HILL
+    hill_init();
 #endif
     if (settings.memory_file != NULL && reuse_mem) {
         mc_ptr_t old_base = meta->old_base;

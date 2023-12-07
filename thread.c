@@ -70,7 +70,7 @@ struct conn_queue {
 /* Locks for cache LRU operations */
 pthread_mutex_t lru_locks[POWER_LARGEST];
 
-/* Yunfan: Locks for cache GLRFU operations*/
+/* Yunfan: Locks for cache HILL operations*/
 pthread_mutex_t sim_locks[POWER_LARGEST];
 
 /* Connection lock around accepting new connections */
