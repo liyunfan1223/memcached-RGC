@@ -2306,7 +2306,7 @@ struct testcase testcases[] = {
     { NULL, NULL }
 };
 
-/* Stub out function defined in memcached.c */
+/* Stub out function defined in memhc.c */
 void STATS_LOCK(void);
 void STATS_UNLOCK(void);
 void STATS_LOCK(void)
@@ -2326,7 +2326,7 @@ int main(int argc, char **argv)
     }
 #endif
     /* Initialized directly instead of using hash_init to avoid pulling in
-       the definition of settings struct from memcached.h */
+       the definition of settings struct from memhc.h */
     hash = jenkins_hash;
     stats_prefix_init(':');
 

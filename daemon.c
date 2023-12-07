@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "memcached.h"
+#include "memhc.h"
 
 int daemonize(int nochdir, int noclose)
 {

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "memcached.h"
+#include "memhc.h"
 
 static void display(const char *name, size_t size) {
     printf("%s\t%d\n", name, (int)size);

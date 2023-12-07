@@ -11,7 +11,7 @@
  * The rest of the file is licensed under the BSD license.  See LICENSE.
  */
 
-#include "memcached.h"
+#include "memhc.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/resource.h>

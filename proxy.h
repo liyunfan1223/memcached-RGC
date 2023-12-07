@@ -1,7 +1,7 @@
 #ifndef PROXY_H
 #define PROXY_H
 
-#include "memcached.h"
+#include "memhc.h"
 #include "extstore.h"
 #include <string.h>
 #include <stdlib.h>

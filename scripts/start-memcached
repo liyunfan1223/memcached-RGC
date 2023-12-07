@@ -2,7 +2,7 @@
 
 # start-memcached
 # 2003/2004 - Jay Bonci <jaybonci@debian.org>
-# This script handles the parsing of the /etc/memcached.conf file
+# This script handles the parsing of the /etc/memhc.conf file
 # and was originally created for the Debian distribution.
 # Anyone may use this little script under the same terms as
 # memcached itself.
@@ -16,7 +16,7 @@ if($> != 0 and $< != 0)
     exit;
 }
 
-my $params; my $etchandle; my $etcfile = "/etc/memcached.conf";
+my $params; my $etchandle; my $etcfile = "/etc/memhc.conf";
 
 # This script assumes that memcached is located at /usr/bin/memcached, and
 # that the pidfile is writable at /var/run/memcached.pid
@@ -29,7 +29,7 @@ if (scalar(@ARGV) == 2) {
     $pidfile = shift(@ARGV);
 }
 
-# If we don't get a valid logfile parameter in the /etc/memcached.conf file,
+# If we don't get a valid logfile parameter in the /etc/memhc.conf file,
 # we'll just throw away all of our in-daemon output. We need to re-tie it so
 # that non-bash shells will not hang on logout. Thanks to Michael Renner for
 # the tip

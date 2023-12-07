@@ -6,7 +6,7 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <string.h>
-#include "memcached.h"
+#include "memhc.h"
 
 static char *kill_msg;
 // Make sure to preserve the ??? position in the string, or correct the offsets

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "memcached.h"
+#include "memhc.h"
 
 /*
  * this section of code will drop all (OpenBSD) privileges including

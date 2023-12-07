@@ -1,6 +1,6 @@
-bin_PROGRAMS = memcached
+bin_PROGRAMS = memhc
 pkginclude_HEADERS = protocol_binary.h xxhash.h
-noinst_PROGRAMS = memcached-debug sizes testapp timedrun
+noinst_PROGRAMS = memhc-debug sizes testapp timedrun
 
 BUILT_SOURCES=
 
@@ -8,7 +8,7 @@ testapp_SOURCES = testapp.c util.c util.h stats_prefix.c stats_prefix.h jenkins_
 
 timedrun_SOURCES = timedrun.c
 
-memcached_SOURCES = memcached.c memcached.h \
+memhc_SOURCES = memhc.c memhc.h \
                     hash.c hash.h \
                     jenkins_hash.c jenkins_hash.h \
                     murmur3_hash.c murmur3_hash.h \
@@ -32,31 +32,31 @@ memcached_SOURCES = memcached.c memcached.h \
                     proto_bin.c proto_bin.h
 
 if BUILD_SOLARIS_PRIVS
-memcached_SOURCES += solaris_priv.c
+memhc_SOURCES += solaris_priv.c
 endif
 
 if BUILD_LINUX_PRIVS
-memcached_SOURCES += linux_priv.c
+memhc_SOURCES += linux_priv.c
 endif
 
 if BUILD_OPENBSD_PRIVS
-memcached_SOURCES += openbsd_priv.c
+memhc_SOURCES += openbsd_priv.c
 endif
 
 if BUILD_FREEBSD_PRIVS
-memcached_SOURCES += freebsd_priv.c
+memhc_SOURCES += freebsd_priv.c
 endif
 
 if BUILD_DARWIN_PRIVS
-memcached_SOURCES += darwin_priv.c
+memhc_SOURCES += darwin_priv.c
 endif
 
 if ENABLE_SASL
-memcached_SOURCES += sasl_defs.c
+memhc_SOURCES += sasl_defs.c
 endif
 
 if ENABLE_PROXY
-memcached_SOURCES += proto_proxy.c proto_proxy.h vendor/mcmc/mcmc.h \
+memhc_SOURCES += proto_proxy.c proto_proxy.h vendor/mcmc/mcmc.h \
 					 proxy_xxhash.c proxy.h \
 					 proxy_await.c proxy_ustats.c \
 					 proxy_jump_hash.c proxy_request.c \
@@ -67,78 +67,78 @@ memcached_SOURCES += proto_proxy.c proto_proxy.h vendor/mcmc/mcmc.h \
 endif
 
 if ENABLE_EXTSTORE
-memcached_SOURCES += extstore.c extstore.h \
+memhc_SOURCES += extstore.c extstore.h \
                      crc32c.c crc32c.h \
                      storage.c storage.h \
                      slab_automove_extstore.c slab_automove_extstore.h
 endif
 
 if ENABLE_TLS
-memcached_SOURCES += tls.c tls.h
+memhc_SOURCES += tls.c tls.h
 endif
 
-memcached_debug_SOURCES = $(memcached_SOURCES)
-memcached_CPPFLAGS = -DNDEBUG
-memcached_debug_LDADD = @PROFILER_LDFLAGS@
-memcached_debug_CFLAGS = @PROFILER_FLAGS@
+memhc_debug_SOURCES = $(memhc_SOURCES)
+memhc_CPPFLAGS = -DNDEBUG
+memhc_debug_LDADD = @PROFILER_LDFLAGS@
+memhc_debug_CFLAGS = @PROFILER_FLAGS@
 
-memcached_LDADD =
-memcached_DEPENDENCIES =
-memcached_debug_DEPENDENCIES =
+memhc_LDADD =
+memhc_DEPENDENCIES =
+memhc_debug_DEPENDENCIES =
 CLEANFILES=
 
 if BUILD_LINUX_PRIVS
-memcached_LDADD += -lseccomp
-memcached_debug_LDADD += -lseccomp
+memhc_LDADD += -lseccomp
+memhc_debug_LDADD += -lseccomp
 endif
 
 if BUILD_DTRACE
-BUILT_SOURCES += memcached_dtrace.h
-CLEANFILES += memcached_dtrace.h
+BUILT_SOURCES += memhc_dtrace.h
+CLEANFILES += memhc_dtrace.h
 endif
 
 if DTRACE_INSTRUMENT_OBJ
-memcached_LDADD += memcached_dtrace.o
-memcached_DEPENDENCIES += memcached_dtrace.o
-memcached_debug_LDADD += memcached_debug_dtrace.o
-memcached_debug_DEPENDENCIES += memcached_debug_dtrace.o
-CLEANFILES += memcached_dtrace.o memcached_debug_dtrace.o
+memhc_LDADD += memhc_dtrace.o
+memhc_DEPENDENCIES += memhc_dtrace.o
+memhc_debug_LDADD += memhc_debug_dtrace.o
+memhc_debug_DEPENDENCIES += memhc_debug_dtrace.o
+CLEANFILES += memhc_dtrace.o memhc_debug_dtrace.o
 endif
 
 if ENABLE_PROXY
-memcached_LDADD += vendor/lua/src/liblua.a vendor/mcmc/mcmc.o
-memcached_debug_LDADD += vendor/lua/src/liblua.a vendor/mcmc/mcmc.o
+memhc_LDADD += vendor/lua/src/liblua.a vendor/mcmc/mcmc.o
+memhc_debug_LDADD += vendor/lua/src/liblua.a vendor/mcmc/mcmc.o
 endif
 
 if ENABLE_PROXY_URING
-memcached_LDADD += vendor/liburing/src/liburing.a
-memcached_debug_LDADD += vendor/liburing/src/liburing.a
+memhc_LDADD += vendor/liburing/src/liburing.a
+memhc_debug_LDADD += vendor/liburing/src/liburing.a
 endif
 
-memcached_debug_CFLAGS += -DMEMCACHED_DEBUG
+memhc_debug_CFLAGS += -Dmemhc_DEBUG
 
 # build fails on Darwin with const signature replacements.
 if DARWIN
-memcached_dtrace.h: memcached_dtrace.d
-	${DTRACE} -h -s memcached_dtrace.d
+memhc_dtrace.h: memhc_dtrace.d
+	${DTRACE} -h -s memhc_dtrace.d
 else
-memcached_dtrace.h: memcached_dtrace.d
-	${DTRACE} -h -s memcached_dtrace.d
-	sed -e 's,void \*,const void \*,' memcached_dtrace.h | \
+memhc_dtrace.h: memhc_dtrace.d
+	${DTRACE} -h -s memhc_dtrace.d
+	sed -e 's,void \*,const void \*,' memhc_dtrace.h | \
 	sed -e 's,char \*,const char \*,g' | tr '\t' ' ' > mmc_dtrace.tmp
-	mv mmc_dtrace.tmp memcached_dtrace.h
+	mv mmc_dtrace.tmp memhc_dtrace.h
 endif
 
-memcached_dtrace.o: $(memcached_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_dtrace.o -s ${srcdir}/memcached_dtrace.d $(memcached_OBJECTS)
+memhc_dtrace.o: $(memhc_OBJECTS)
+	$(DTRACE) $(DTRACEFLAGS) -G -o memhc_dtrace.o -s ${srcdir}/memhc_dtrace.d $(memhc_OBJECTS)
 
-memcached_debug_dtrace.o: $(memcached_debug_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(memcached_debug_OBJECTS)
+memhc_debug_dtrace.o: $(memhc_debug_OBJECTS)
+	$(DTRACE) $(DTRACEFLAGS) -G -o memhc_debug_dtrace.o -s ${srcdir}/memhc_dtrace.d $(memhc_debug_OBJECTS)
 
 
 SUBDIRS = doc
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts t memcached.spec memcached_dtrace.d version.m4 README.md LICENSE.bipbuffer
+EXTRA_DIST = doc scripts t memhc.spec memhc_dtrace.d version.m4 README.md LICENSE.bipbuffer
 EXTRA_DIST += vendor/Makefile vendor/lua vendor/mcmc
 
 if ENABLE_PROXY
@@ -162,7 +162,7 @@ test_basic_tls:
 	fi
 endif
 
-test:	memcached-debug sizes testapp
+test:	memhc-debug sizes testapp
 	$(builddir)/sizes
 	$(builddir)/testapp
 if ENABLE_TLS
@@ -176,21 +176,21 @@ endif
 	  prove $(srcdir)/t; \
 	fi
 	@if test `basename $(PROFILER)` = "gcov"; then \
-	  for file in memcached_debug-*.gc??; do \
-	    mv -f $$file `echo $$file | sed 's/memcached_debug-//'`; \
+	  for file in memhc_debug-*.gc??; do \
+	    mv -f $$file `echo $$file | sed 's/memhc_debug-//'`; \
 	  done && \
 	  for file in *.gcda; do \
 	    srcfile=`echo $$file | sed 's/.gcda/.c/'`; \
-	    if test -n "`echo $(memcached_debug_SOURCES) | grep $$srcfile`"; then \
+	    if test -n "`echo $(memhc_debug_SOURCES) | grep $$srcfile`"; then \
 	      echo `$(PROFILER) $$srcfile` | sed 's/'$$srcfile':.*//'; \
 	    fi \
 	  done \
 	elif test `basename $(PROFILER)` = "tcov"; then \
-	  files=`grep SRCFILE memcached-debug.profile/tcovd | sed 's/SRCFILE://' | sort | uniq` && \
-	  $(PROFILER) -x memcached-debug.profile $$files 2>&1; \
+	  files=`grep SRCFILE memhc-debug.profile/tcovd | sed 's/SRCFILE://' | sort | uniq` && \
+	  $(PROFILER) -x memhc-debug.profile $$files 2>&1; \
 	  for file in *.tcov; do \
 	    srcfile=`echo $$file | sed 's/.tcov//'`; \
-	    if test -n "`echo $(memcached_debug_SOURCES) | grep $$srcfile`"; then \
+	    if test -n "`echo $(memhc_debug_SOURCES) | grep $$srcfile`"; then \
 	      echo $$srcfile : `grep 'Percent of the file executed' $$file`; \
 	    fi \
 	  done \

@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <priv.h>
 #include <stdio.h>
-#include "memcached.h"
+#include "memhc.h"
 
 /*
  * this section of code will drop all (Solaris) privileges including

@@ -12,8 +12,8 @@
 ### END INIT INFO
 
 # Usage:
-# cp /etc/memcached.conf /etc/memcached_server1.conf
-# cp /etc/memcached.conf /etc/memcached_server2.conf
+# cp /etc/memhc.conf /etc/memcached_server1.conf
+# cp /etc/memhc.conf /etc/memcached_server2.conf
 # start all instances:
 # /etc/init.d/memcached start
 # start one instance:

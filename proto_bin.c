@@ -4,7 +4,7 @@
  * NOTE: The binary protocol is deprecated as of 1.6.0.
  */
 
-#include "memcached.h"
+#include "memhc.h"
 #include "proto_bin.h"
 #include "storage.h"
 #ifdef TLS

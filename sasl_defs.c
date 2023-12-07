@@ -1,5 +1,5 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-#include "memcached.h"
+#include "memhc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,8 +12,8 @@ char my_sasl_hostname[1025];
  * specify one in the environment variable SASL_CONF_PATH
  */
 const char * const locations[] = {
-    "/etc/sasl/memcached.conf",
-    "/etc/sasl2/memcached.conf",
+    "/etc/sasl/memhc.conf",
+    "/etc/sasl2/memhc.conf",
     NULL
 };
 
@@ -29,8 +29,8 @@ const char *const locations_dir_path[] = {
  * the actual configure file which used by sasl, when GETCONFPATH is
  * enabled */
 const char *const locations_file_path[] = {
-    "/etc/sasl/memcached.conf/memcached.conf",
-    "/etc/sasl2/memcached.conf/memcached.conf",
+    "/etc/sasl/memhc.conf/memhc.conf",
+    "/etc/sasl2/memhc.conf/memhc.conf",
     NULL
 };
 #endif

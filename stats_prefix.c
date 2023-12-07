@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /* Author: Steven Grimm <sgrimm@facebook.com> */
-#include "memcached.h"
+#include "memhc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

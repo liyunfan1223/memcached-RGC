@@ -10,7 +10,7 @@
 #define LOGGER_ENTRY_MAX_SIZE 2048
 #define GET_LOGGER() ((logger *) pthread_getspecific(logger_key));
 
-/* Inlined from memcached.h - should go into sub header */
+/* Inlined from memhc.h - should go into sub header */
 typedef unsigned int rel_time_t;
 
 enum log_entry_type {

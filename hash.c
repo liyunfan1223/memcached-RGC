@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-#include "memcached.h"
+#include "memhc.h"
 #include "jenkins_hash.h"
 #include "murmur3_hash.h"
 #define XXH_INLINE_ALL // modifier for xxh3's include below

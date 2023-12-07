@@ -1,5 +1,5 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-#include "memcached.h"
+#include "memhc.h"
 #include "bipbuffer.h"
 #include "hash.h"
 #include "slab_automove.h"

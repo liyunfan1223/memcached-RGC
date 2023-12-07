@@ -3,7 +3,7 @@
  * Functions for handling the text related protocols, original and meta.
  */
 
-#include "memcached.h"
+#include "memhc.h"
 #include "proto_text.h"
 // FIXME: only for process_proxy_stats()
 // - some better/different structure for stats subcommands

@@ -1,9 +1,9 @@
 AC_PREREQ(2.52)
 m4_include([version.m4])
 m4_include([m4/c99-backport.m4])
-AC_INIT([memcached], [VERSION_NUMBER], [memcached@googlegroups.com])
+AC_INIT([memhc], [VERSION_NUMBER], [memhc@googlegroups.com])
 AC_CANONICAL_HOST
-AC_CONFIG_SRCDIR([memcached.c])
+AC_CONFIG_SRCDIR([memhc.c])
 AM_INIT_AUTOMAKE([foreign])
 AM_CONFIG_HEADER([config.h])
 
@@ -201,7 +201,7 @@ if test "x$enable_dtrace" = "xyes"; then
   if test "x$DTRACE" != "xno"; then
     AC_DEFINE([ENABLE_DTRACE],1,[Set to nonzero if you want to include DTRACE])
     build_dtrace=yes
-    $DTRACE -h -o conftest.h -s memcached_dtrace.d 2>/dev/zero
+    $DTRACE -h -o conftest.h -s memhc_dtrace.d 2>/dev/zero
     if test $? -eq 0
     then
         dtrace_instrument_obj=yes
@@ -765,11 +765,11 @@ AC_TRY_LINK([#include <inttypes.h>
   AC_DEFINE(HAVE_GCC_64ATOMICS, 1, [GCC 64bit Atomics available])])
 AC_MSG_RESULT($have_gcc_64atomics)
 
-dnl Check for the requirements for running memcached with less privileges
+dnl Check for the requirements for running memhc with less privileges
 dnl than the default privilege set. On Solaris we need setppriv and priv.h
 dnl If you want to add support for other platforms you should check for
 dnl your requirements, define HAVE_DROP_PRIVILEGES, and make sure you add
-dnl the source file containing the implementation into memcached_SOURCE
+dnl the source file containing the implementation into memhc_SOURCE
 dnl in Makefile.am
 AC_CHECK_FUNCS(setppriv, [
    AC_CHECK_HEADER(priv.h, [

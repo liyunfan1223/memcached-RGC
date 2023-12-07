@@ -13,7 +13,7 @@
 #include <atomic.h>
 #endif
 
-#include "memcached.h"
+#include "memhc.h"
 #include "bipbuffer.h"
 
 #ifdef LOGGER_DEBUG

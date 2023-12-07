@@ -5,7 +5,7 @@
  */
 
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-#include "memcached.h"
+#include "memhc.h"
 #include "slab_automove_extstore.h"
 #include <stdlib.h>
 #include <string.h>

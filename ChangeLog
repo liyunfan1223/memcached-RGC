@@ -238,7 +238,7 @@
 
 	* Fix compilation bug on freebsd 6.x (and maybe others)
 	* Update RPM spec file per redhat bugzilla #238994
-	* Move unistd.h to memcached.h to get rid of warnings
+	* Move unistd.h to memhc.h to get rid of warnings
 	* Add string.h to thread.c to get correctly prototyped strerror()
 
 2007-05-04  Paul Lindner  <lindner@inuus.com>
@@ -568,7 +568,7 @@
 	  - check for malloc.h (unavailable on BSDs)
 	  - check for socklen_t (unavailable on OSX)
 	* assoc.c, items.c, slabs.c:  Remove some unused headers.
-	* memcached.c:  allow for nonexistence of malloc.h; #define a POSIX
+	* memhc.c:  allow for nonexistence of malloc.h; #define a POSIX
 	  macro to import mlockall flags.
 
 2003-07-29
@@ -619,7 +619,7 @@
 Fri, 13 Jun 2003 10:05:51 -0700  Evan Martin  <martine@danga.com>
 
 	* configure.ac, autogen.sh, Makefile.am:  Use autotools.
-	* items.c, memcached.c:  #include <time.h> for time(),
+	* items.c, memhc.c:  #include <time.h> for time(),
 	  printf time_t as %lu (is this correct?),
 	  minor warnings fixes.
 

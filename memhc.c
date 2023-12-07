@@ -13,7 +13,7 @@
  *      Anatoly Vorobey <mellon@pobox.com>
  *      Brad Fitzpatrick <brad@danga.com>
  */
-#include "memcached.h"
+#include "memhc.h"
 #include "storage.h"
 #include "authfile.h"
 #include "restart.h"
